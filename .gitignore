@@ -1,0 +1,7 @@
+/script/secrets.json
+/build/
+/node_modules/
+/.idea/
+sui.log.*
+*lock*
+```
