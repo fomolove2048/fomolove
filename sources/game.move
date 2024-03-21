@@ -1,25 +1,17 @@
 module fomolove2048::game {
-    use std::vector;
     use std::string::{utf8};
-
     use sui::object::{Self, ID, UID};
     use sui::tx_context::{Self, TxContext, sender};
     use sui::event;
     use sui::transfer::{transfer, public_transfer};
 
-    use sui::sui::SUI;
-    use sui::balance::{Self, Balance};
-    use sui::coin::{Self, Coin};
-    use sui::pay;
-    use sui::transfer;
     
     use sui::package;
     use sui::display;
 
     use fomolove2048::game_board::{Self, GameBoard};
 
-    friend fomolove2048::leaderboard;
-    friend fomolove2048::player;
+    friend fomolove2048::season;
 
     #[test_only]
     friend fomolove2048::game_tests;
@@ -27,9 +19,9 @@ module fomolove2048::game {
     #[test_only]
     friend fomolove2048::leaderboard_tests;
 
-    const DEFAULT_FEE: u64 = 200_000_000;
+    // const DEFAULT_FEE: u64 = 200_000_000;
 
-    const EInvalidPlayer: u64 = 0;
+    // const EInvalidPlayer: u64 = 0;
     const ENotMaintainer: u64 = 1;
     const ENoBalance: u64 = 2;
 
@@ -52,13 +44,13 @@ module fomolove2048::game {
         player: address
     }
 
-    struct GameMaintainer has key {
-        id: UID,
-        maintainer_address: address,
-        game_count: u64,
-        fee: u64,
-        balance: Balance<SUI>
-    }
+    // struct GameMaintainer has key {
+    //     id: UID,
+    //     maintainer_address: address,
+    //     game_count: u64,
+    //     fee: u64,
+    //     balance: Balance<SUI>
+    // }
 
     struct NewGameEvent has copy, drop {
         game_id: ID,
@@ -96,13 +88,13 @@ module fomolove2048::game {
         ];
 
         let values = vector[
-            utf8(b"Sui 8192"),
+            utf8(b"Fomolove 2048"),
             utf8(b"https://sui8192.s3.amazonaws.com/{top_tile}.png"),
             utf8(b"Sui 8192 is a fun, 100% on-chain game. Combine the tiles to get a high score!"),
             utf8(b"https://ethoswallet.github.io/Sui8192/"),
-            utf8(b"Sui 8192"),
+            utf8(b"Fomolove 2048"),
             utf8(b"https://sui8192.s3.amazonaws.com/sui-8192.png"),
-            utf8(b"Ethos")
+            utf8(b"Fomolove2048")
         ];
 
         let publisher = package::claim(otw, ctx);
@@ -113,21 +105,16 @@ module fomolove2048::game {
 
         display::update_version(&mut display);
 
-        let maintainer = create_maintainer(ctx);
+        // let maintainer = create_maintainer(ctx);
 
         public_transfer(publisher, sender(ctx));
         public_transfer(display, sender(ctx));
-        transfer::share_object(maintainer);
+        // transfer::share_object(maintainer);
     }
 
     // PUBLIC ENTRY FUNCTIONS //
     
-    public entry fun create(maintainer: &mut GameMaintainer, fee: vector<Coin<SUI>>, ctx: &mut TxContext) {
-        let (paid, remainder) = merge_and_split(fee, maintainer.fee, ctx);
-
-        coin::put(&mut maintainer.balance, paid);
-        transfer::public_transfer(remainder, tx_context::sender(ctx));
-
+    public(friend) fun create(game_count: u64, ctx: &mut TxContext) {
         let player = tx_context::sender(ctx);
         let uid = object::new(ctx);
         let random = object::uid_to_bytes(&uid);
@@ -138,7 +125,7 @@ module fomolove2048::game {
 
         let game = Game {
             id: uid,
-            game: maintainer.game_count + 1,
+            game: game_count + 1,
             player,
             move_count: 0,
             score,
@@ -153,8 +140,6 @@ module fomolove2048::game {
             score,
             packed_spaces: *game_board::packed_spaces(&initial_game_board)
         });
-        
-        maintainer.game_count = maintainer.game_count + 1;
 
         transfer(game, player);
     }
@@ -220,23 +205,23 @@ module fomolove2048::game {
         game.top_tile = game_board::analyze_top_tile(&game.active_board);
     }
 
-    public entry fun pay_maintainer(maintainer: &mut GameMaintainer, ctx: &mut TxContext) {
-        assert!(tx_context::sender(ctx) == maintainer.maintainer_address, ENotMaintainer);
-        let amount = balance::value<SUI>(&maintainer.balance);
-        assert!(amount > 0, ENoBalance);
-        let payment = coin::take(&mut maintainer.balance, amount, ctx);
-        transfer::public_transfer(payment, tx_context::sender(ctx));
-    }
-
-    public entry fun change_maintainer(maintainer: &mut GameMaintainer, new_maintainer: address, ctx: &mut TxContext) {
-        assert!(tx_context::sender(ctx) == maintainer.maintainer_address, ENotMaintainer);
-        maintainer.maintainer_address = new_maintainer;
-    }
-
-    public entry fun change_fee(maintainer: &mut GameMaintainer, new_fee: u64, ctx: &mut TxContext) {
-        assert!(tx_context::sender(ctx) == maintainer.maintainer_address, ENotMaintainer);
-        maintainer.fee = new_fee;
-    }
+    // public entry fun pay_maintainer(maintainer: &mut GameMaintainer, ctx: &mut TxContext) {
+    //     assert!(tx_context::sender(ctx) == maintainer.maintainer_address, ENotMaintainer);
+    //     let amount = balance::value<SUI>(&maintainer.balance);
+    //     assert!(amount > 0, ENoBalance);
+    //     let payment = coin::take(&mut maintainer.balance, amount, ctx);
+    //     transfer::public_transfer(payment, tx_context::sender(ctx));
+    // }
+    //
+    // public entry fun change_maintainer(maintainer: &mut GameMaintainer, new_maintainer: address, ctx: &mut TxContext) {
+    //     assert!(tx_context::sender(ctx) == maintainer.maintainer_address, ENotMaintainer);
+    //     maintainer.maintainer_address = new_maintainer;
+    // }
+    //
+    // public entry fun change_fee(maintainer: &mut GameMaintainer, new_fee: u64, ctx: &mut TxContext) {
+    //     assert!(tx_context::sender(ctx) == maintainer.maintainer_address, ENotMaintainer);
+    //     maintainer.fee = new_fee;
+    // }
  
     // PUBLIC ACCESSOR FUNCTIONS //
 
@@ -268,31 +253,31 @@ module fomolove2048::game {
 
     // Friend functions
 
-    public(friend) fun create_maintainer(ctx: &mut TxContext): GameMaintainer {
-        GameMaintainer {
-            id: object::new(ctx),
-            maintainer_address: sender(ctx),
-            game_count: 0,
-            fee: DEFAULT_FEE,
-            balance: balance::zero<SUI>()
-        }
-    }
+    // public(friend) fun create_maintainer(ctx: &mut TxContext): GameMaintainer {
+    //     GameMaintainer {
+    //         id: object::new(ctx),
+    //         maintainer_address: sender(ctx),
+    //         game_count: 0,
+    //         fee: DEFAULT_FEE,
+    //         balance: balance::zero<SUI>()
+    //     }
+    // }
 
-    public fun merge_and_split(
-        coins: vector<Coin<SUI>>, amount: u64, ctx: &mut TxContext
-    ): (Coin<SUI>, Coin<SUI>) {
-        let base = vector::pop_back(&mut coins);
-        pay::join_vec(&mut base, coins);
-        let coin_value = coin::value(&base);
-        assert!(coin_value >= amount, coin_value);
-        (coin::split(&mut base, amount, ctx), base)
-    }
+    // public fun merge_and_split(
+    //     coins: vector<Coin<SUI>>, amount: u64, ctx: &mut TxContext
+    // ): (Coin<SUI>, Coin<SUI>) {
+    //     let base = vector::pop_back(&mut coins);
+    //     pay::join_vec(&mut base, coins);
+    //     let coin_value = coin::value(&base);
+    //     assert!(coin_value >= amount, coin_value);
+    //     (coin::split(&mut base, amount, ctx), base)
+    // }
 
-    public fun merge_coins(
-        coins: vector<Coin<SUI>>, ctx: &mut TxContext
-    ): Coin<SUI> {
-        let base = vector::pop_back(&mut coins);
-        pay::join_vec(&mut base, coins);
-        base
-    }
+    // public fun merge_coins(
+    //     coins: vector<Coin<SUI>>, ctx: &mut TxContext
+    // ): Coin<SUI> {
+    //     let base = vector::pop_back(&mut coins);
+    //     pay::join_vec(&mut base, coins);
+    //     base
+    // }
 }

@@ -1,18 +1,21 @@
 module fomolove2048::player {
     use sui::object::{Self, UID};
     use sui::tx_context::{Self, TxContext};
-    use std::string::{Self, String};
+    use std::string::{Self, String, utf8};
     use sui::table::{Self, Table};
     use std::vector;
     use sui::coin::Coin;
     use sui::transfer;
     use sui::sui::SUI;
 
-    use fomolove2048::game::{Self, merge_and_split};
+    use fomolove2048::season::{Self, merge_and_split};
 
-    const EInvalidPlayerNameLength: u64 = 0;
-    const EInvalidPlayerNameNoSpace: u64 = 1;
-    const EInvalidPlayerName: u64 =2;
+    friend fomolove2048::season;
+
+    const EInvalidPlayerNameLength: u64 = 1000000;
+    const EInvalidPlayerNameNoSpace: u64 = 1000001;
+    const EInvalidPlayerName: u64 = 1000002;
+    const EInvalidAffiliateId: u64 = 1000003;
 
     struct PlayMaintainer has key {
         id: UID,
@@ -68,7 +71,7 @@ module fomolove2048::player {
         return true
     }
 
-    public fun get_player_id(maintainer: &mut PlayMaintainer, player: &address): u64 {
+    public(friend) fun get_player_id(maintainer: &mut PlayMaintainer, player: &address): u64 {
         let player_id: u64;
         if (table::contains(&maintainer.player_id_by_address, *player)){
             player_id = *(table::borrow(&maintainer.player_id_by_address, *player));
@@ -79,24 +82,21 @@ module fomolove2048::player {
         return player_id
     }
 
-    public entry fun registerName(
+    public(friend) fun register_name(
         maintainer: &mut PlayMaintainer,
         fee: vector<Coin<SUI>>,
         name: String,
         aff_id: u64,
         ctx: &mut TxContext
     ){
-        let (paid, remainder) = merge_and_split(fee, maintainer.registration_fee, ctx);
+        assert!(check_id_name_valid(maintainer, &name), EInvalidPlayerName);
+        let player = tx_context::sender(ctx);
+        let play_id = get_player_id(maintainer, &player);
 
+        let (paid, remainder) = merge_and_split(fee, maintainer.registration_fee, ctx);
         transfer::public_transfer(paid, maintainer.maintainer_address);
         transfer::public_transfer(remainder, tx_context::sender(ctx));
 
-        let player = tx_context::sender(ctx);
-        let uid = object::new(ctx);
-
-        assert!(check_id_name_valid(maintainer, &name), EInvalidPlayerName);
-
-        let play_id = get_player_id(maintainer, &player);
 
         if (aff_id != 0 && aff_id != play_id){
           if (table::contains(&maintainer.player_id_to_aff_id, play_id)){
@@ -117,45 +117,82 @@ module fomolove2048::player {
         table::add(&mut maintainer.player_id_to_name_list, play_id, name_list);
     }
 
-    public(friend) fun view_player_id_by_address(
+    public(friend) fun update_aff_id(
+        maintainer: &mut PlayMaintainer,
+        player_id: u64,
+        aff_id: u64
+    ){
+        assert!(aff_id != 0 && aff_id != player_id, EInvalidAffiliateId);
+        if (table::contains(&maintainer.player_id_to_aff_id, player_id)){
+            let player_aff_id = *table::borrow(&maintainer.player_id_to_aff_id, player_id);
+            if (player_aff_id != aff_id){
+                table::remove(&mut maintainer.player_id_to_aff_id, player_id);
+                table::add(&mut maintainer.player_id_to_aff_id, player_id, aff_id);
+            }
+        } else {
+            table::add(&mut maintainer.player_id_to_aff_id, player_id, aff_id);
+        }
+    }
+
+    public fun view_player_id_by_address(
         maintainer: &PlayMaintainer,
         player_address: address
     ): u64{
-        return *table::borrow(&maintainer.player_id_by_address, player_address)
+        if (!table::contains(&maintainer.player_id_by_address, player_address)){
+            return 0
+        } else {
+            return *table::borrow(&maintainer.player_id_by_address, player_address)
+        }
     }
 
-    public(friend) fun view_player_id_by_name(
+    public fun view_player_id_by_name(
         maintainer: &PlayMaintainer,
         name: String
     ): u64{
-        return *table::borrow(&maintainer.player_id_by_name, name)
+        if (!table::contains(&maintainer.player_id_by_name, name)){
+            return 0
+        } else {
+            return *table::borrow(&maintainer.player_id_by_name, name)
+        }
     }
 
-    public(friend) fun view_player_aff_id(
+    public fun view_player_aff_id(
         maintainer: &PlayMaintainer,
         player_id: u64
     ): u64{
-        return *table::borrow(&maintainer.player_id_to_aff_id, player_id)
+        if (!table::contains(&maintainer.player_id_to_aff_id, player_id)){
+            return 0
+        } else {
+            return *table::borrow(&maintainer.player_id_to_aff_id, player_id)
+        }
     }
 
-    public(friend) fun view_player_name_list(
+    public fun view_player_name_list(
         maintainer: &PlayMaintainer,
         player_id: u64
     ): vector<String>{
-        return *table::borrow(&maintainer.player_id_to_name_list, player_id)
+        if (!table::contains(&maintainer.player_id_to_name_list, player_id)){
+            return vector::empty<String>()
+        } else {
+            return *table::borrow(&maintainer.player_id_to_name_list, player_id)
+        }
     }
 
-    public(friend) fun view_player_actived_name_by_player_id(
+    public fun view_player_actived_name_by_player_id(
         maintainer: &PlayMaintainer,
         player_id: u64
-    ): vector<String>{
-        return *table::borrow(&maintainer.player_id_to_name_list, player_id)
+    ): String{
+        if (!table::contains(&maintainer.player_id_to_name, player_id)){
+            return utf8(b"")
+        } else {
+            return *vector::borrow(&maintainer.player_id_to_name, player_id)
+        }
     }
 
-    public(friend) fun view_player_actived_name_by_player_address(
+    public fun view_player_actived_name_by_player_address(
         maintainer: &PlayMaintainer,
         player_address: address
-    ): vector<String>{
+    ): String{
         let player_id= view_player_id_by_address(maintainer, player_address);
         return view_player_actived_name_by_player_id(maintainer, player_id)
     }

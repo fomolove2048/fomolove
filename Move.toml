@@ -4,8 +4,8 @@ version = "0.0.1"
 #published-at = "0x033495b86d276fcf98695d1a8225242783ee26e232f547653a3412245f5ae4c3"
 
 [dependencies]
-#Sui = { local = "../../../sui/sui/crates/sui-framework/packages/sui-framework" }
-Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "testnet" }
+Sui = { local = "../sui/crates/sui-framework/packages/sui-framework" }
+#Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "testnet" }
 
 [addresses]
 fomolove2048 = "0x0"

@@ -3,7 +3,7 @@ module fomolove2048::keys_calc {
 
     friend fomolove2048::season;
 
-    const CACL_DECIMALS:u128 = 10**18;
+    const CACL_DECIMALS:u128 = 10^18;
 
     //calculates how many keys would exist with given an amount of sui
     public(friend) fun keys(suis: u128): u128{
