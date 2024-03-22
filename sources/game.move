@@ -184,6 +184,8 @@ module fomolove2048::game {
         game.score = score;
         game.top_tile = top_tile;
         game.game_over = game_over;
+
+        fix_game(game);
     }
 
     public entry fun burn_game(game: Game)  {

@@ -44,10 +44,10 @@ module fomolove2048::season {
     const POT_TO_WINNER_PRIZE_RATE: u64 = 48;
     const POT_TO_NEXT_SEASON_POT_RATE: u64 = 2;
     const POT_TO_PLATFORM_RATE: u64 = 10;
-    const POT_TO_WINNER_TEAM_RATE_IN_WHITE: u64 = 25;
-    const POT_TO_WINNER_TEAM_RATE_IN_RED: u64 = 35;
-    const POT_TO_ROSE_HOLDER_RATE_IN_WHITE: u64 = 15;  ///TODO: all rose holder or only winner rose holder
-    const POT_TO_ROSE_HOLDER_RATE_IN_RED: u64 = 5;
+    const POT_TO_WINNER_TEAM_KEYS_HOLDER_WHITE: u64 = 25;
+    const POT_TO_WINNER_TEAM_KEYS_HOLDER_RED: u64 = 35;
+    const POT_TO_WINNER_TEAM_ROSE_HOLDER_WHITE: u64 = 15;  //only winner rose holder
+    const POT_TO_WINNER_TEAM_ROSE_HOLDER_RED: u64 = 5;
 
     const DEFAULT_SEASON_TIMER: u64 = 24 * 60 * 60 * 1000;
     const ADD_TIMER_PER_KEY: u64 = 30 * 1000;
@@ -69,6 +69,7 @@ module fomolove2048::season {
         ended: bool,
         winner_team: u64,
         winner_player: u64,
+        mask: u64,
         pot: Balance<SUI>,
         dividend: Balance<SUI>,
         airdrop: Balance<SUI>,
@@ -91,6 +92,7 @@ module fomolove2048::season {
         keys_cur: u64,
         rose_cur: u64,
         game_count: u64,
+        mask: u64,
     }
 
     struct TeamInfoInSeason has store, copy, drop {
@@ -100,7 +102,6 @@ module fomolove2048::season {
         rose_holder: vector<u64>,
         pot_per_key: u64,
         pot_per_rose: u64,
-        dividend_per_key: u64,
         sui_cur: u64,
         keys_cur: u64,
         rose_cur: u64,
@@ -114,7 +115,6 @@ module fomolove2048::season {
 
     struct PlayerVaults has store, copy, drop {
         win_vault: Balance<SUI>,
-        general_vault: Balance<SUI>,
         affiliate_vault: Balance<SUI>,
     }
 
@@ -178,6 +178,7 @@ module fomolove2048::season {
             ended: false,
             winner_team: 0u64,
             winner_player: 0u64,
+            mask: 0u64,
             pot: coin::into_balance(init_pot),
             dividend: balance::zero<SUI>(),
             airdrop: balance::zero<SUI>(),
@@ -194,7 +195,6 @@ module fomolove2048::season {
             rose_holder: vector<u64>[],
             pot_per_key: 0u64,
             pot_per_rose: 0u64,
-            dividend_per_key: 0u64,
             sui_cur: 0u64,
             keys_cur: 0u64,
             rose_cur: 0u64,
@@ -221,7 +221,6 @@ module fomolove2048::season {
 
         let player_vaults = PlayerVaults {
             win_vault: balance::zero<SUI>(),
-            general_vault: balance::zero<SUI>(),
             affiliate_vault: balance::zero<SUI>(),
         };
 
@@ -251,7 +250,6 @@ module fomolove2048::season {
         if (!contains(&global.player_vaults, player_id)){
             let player_info = PlayerVaults{
                 win_vault: balance::zero<SUI>(),
-                general_vault: balance::zero<SUI>(),
                 affiliate_vault: balance::zero<SUI>(),
             };
             table::add(&mut global.player_vaults, player_id, player_info);
@@ -291,6 +289,7 @@ module fomolove2048::season {
                 keys_cur: 0u64,
                 rose_cur: 0u64,
                 game_count: 0u64,
+                mask: 0u64,
             };
             table::add(&mut season.player_info, player_id, player_info);
         };
@@ -303,7 +302,7 @@ module fomolove2048::season {
 
         //if season is actived, dividend
         if (current_time >= season.start_time && current_time <= season.end_time){
-            allocation_emtry_funds(global, season, paid, keys, affiliate_id, team, ctx);
+            allocation_emtry_funds(global, season, paid, keys, player_id, affiliate_id, team, ctx);
         } else if (current_time > season.end_time && !season.ended){
             end_season(global, season, clock, ctx);
         };
@@ -324,14 +323,14 @@ module fomolove2048::season {
 
         //get team info
         let team_info = table::borrow_mut(&mut season.team_info, winner_team);
-        let winner_team_key_holder_prize;
+        let keys_holder_prize;
         let rose_holder_prize;
         if (winner_team == TEAM_WHITE){
-            winner_team_key_holder_prize = coin::take<SUI>(&mut season.pot, POT_TO_WINNER_TEAM_RATE_IN_WHITE/100, ctx);
-            rose_holder_prize = coin::take<SUI>(&mut season.pot, POT_TO_ROSE_HOLDER_RATE_IN_WHITE/100, ctx);
+            keys_holder_prize = coin::take<SUI>(&mut season.pot, POT_TO_WINNER_TEAM_KEYS_HOLDER_WHITE/100, ctx);
+            rose_holder_prize = coin::take<SUI>(&mut season.pot, POT_TO_WINNER_TEAM_ROSE_HOLDER_WHITE/100, ctx);
         } else {
-            winner_team_key_holder_prize = coin::take<SUI>(&mut season.pot, POT_TO_WINNER_TEAM_RATE_IN_RED/100, ctx);
-            rose_holder_prize = coin::take<SUI>(&mut season.pot, POT_TO_ROSE_HOLDER_RATE_IN_RED/100, ctx);
+            keys_holder_prize = coin::take<SUI>(&mut season.pot, POT_TO_WINNER_TEAM_KEYS_HOLDER_RED/100, ctx);
+            rose_holder_prize = coin::take<SUI>(&mut season.pot, POT_TO_WINNER_TEAM_ROSE_HOLDER_RED/100, ctx);
         };
 
         //to winner player
@@ -344,8 +343,8 @@ module fomolove2048::season {
         let winner_info = table::borrow_mut(&mut season.player_info, winner_player);
         let winner_hold_keys = winner_info.keys_cur;
         //to keys holder
-        team_info.pot_per_key = coin::value(&winner_team_key_holder_prize) * 1000 / (team_info.keys_cur - winner_hold_keys);
-        coin::put(&mut team_info.keys_holder_pot, winner_team_key_holder_prize);
+        team_info.pot_per_key = coin::value(&keys_holder_prize) * 1000 / (team_info.keys_cur - winner_hold_keys);
+        coin::put(&mut team_info.keys_holder_pot, keys_holder_prize);
 
         //to rose holder
         let winner_hold_rose = winner_info.rose_cur;
@@ -363,6 +362,7 @@ module fomolove2048::season {
         season: &mut Season,
         paid: Coin<SUI>,
         keys: u64,
+        player_id: u64,
         affiliate_id: u64,
         team: u64,
         ctx: &mut TxContext
@@ -400,14 +400,34 @@ module fomolove2048::season {
             platform
         ) = get_dividend_amount(paid_amount, team);
 
-        coin::put(&mut season.pot, coin::split(&mut paid, pot/100, ctx));
-        coin::put(&mut season.dividend, coin::split(&mut paid, dividend/100, ctx));
-        coin::put(&mut season.airdrop, coin::split(&mut paid, airdrop/100, ctx));
-        coin::put(&mut global.platform, coin::split(&mut paid, platform/100, ctx));
+        coin::put(&mut season.pot, coin::split(&mut paid, pot, ctx));
+        coin::put(&mut season.dividend, coin::split(&mut paid, dividend, ctx));
+        coin::put(&mut season.airdrop, coin::split(&mut paid, airdrop, ctx));
+        coin::put(&mut global.platform, coin::split(&mut paid, platform, ctx));
 
         //to referral
         let affiliater = table::borrow_mut(&mut global.player_vaults, affiliate_id);
-        coin::put(&mut affiliater.affiliate_vault, coin::split(&mut paid, (referral_reward)/100, ctx));
+        coin::put(&mut affiliater.affiliate_vault, coin::split(&mut paid, referral_reward, ctx));
+
+        //update masks
+        update_masks(season, dividend, keys, player_id);
+    }
+
+    fun update_masks(
+        season: &mut Season,
+        dividend: u64,
+        keys: u64,
+        player_id: u64,
+    ){
+        // calc profit per key & round mask based on this buy:  (dust goes to pot)
+        let profit_per_key = dividend * 1000 / season.keys_cur;
+        season.mask = season.mask + profit_per_key;
+
+        // calculate player earning from their own buy (only based on the keys
+        // they just bought).  & update player earnings mask
+        let earn_player = profit_per_key * keys / 1000;
+        let player_info = table::borrow_mut(&mut season.player_info, player_id);
+        player_info.mask = ((player_info.mask * keys / 1000) - earn_player) + player_info.mask;
     }
 
     fun get_dividend_amount(
@@ -429,7 +449,93 @@ module fomolove2048::season {
             platform = paid_amount * DEFAULT_PLATFORM;           //3%
         };
 
-        (pot, dividend, referral_reward, airdrop, platform)
+        (pot/100, dividend/100, referral_reward/100, airdrop/100, platform/100)
+    }
+
+    fun calculates_dividend_earning(
+        season: &mut Season,
+        player_id: u64,
+    ): u64{
+
+        let play_info = table::borrow_mut(&mut season.player_info, player_id);
+        return season.mask * play_info.keys_cur / 1000 - play_info.mask
+    }
+
+    fun calculates_winner_team_keys_earning(
+        season: &mut Season,
+        player_id: u64,
+    ): u64{
+        let play_info = table::borrow_mut(&mut season.player_info, player_id);
+        let team = play_info.team;
+
+        if ((team != season.winner_team) || (!season.ended)){
+            return 0
+        } else {
+            return table::borrow_mut(&mut season.team_info, team).pot_per_key * play_info.keys_cur
+        }
+    }
+
+    fun calculates_winner_team_rose_earning(
+        season: &mut Season,
+        player_id: u64,
+    ): u64{
+        let play_info = table::borrow_mut(&mut season.player_info, player_id);
+        let team = play_info.team;
+
+        if ((team != season.winner_team) || (!season.ended)){
+            return 0
+        } else {
+            return table::borrow_mut(&mut season.team_info, team).pot_per_rose * play_info.rose_cur
+        }
+    }
+
+    public entry fun withdraw_earnings(
+        global: &mut GlobalConfig,
+        season: &mut Season,
+        player_id: u64,
+        ctx: &mut TxContext
+    ){
+        let player_vault = table::borrow_mut(&mut global.player_vaults, player_id);
+        let player_info = table::borrow_mut(&mut season.player_info, player_id);
+        let sender = tx_context::sender(ctx);
+
+        let dividend_earning = calculates_dividend_earning(season, player_id);
+        let winner_team_keys_earning = calculates_winner_team_keys_earning(season, player_id);
+        let winner_team_rose_earning = calculates_winner_team_rose_earning(season, player_id);
+
+        //transfer dividend to player
+        transfer::public_transfer(
+            coin::take(&mut season.dividend, dividend_earning, ctx),
+            sender
+        );
+        player_info.mask = player_info.mask + dividend_earning;
+
+        //transfer winner team keys earning to player
+        let keys_holder_pot = table::borrow_mut(&mut season.team_info, player_info.team).keys_holder_pot;
+        transfer::public_transfer(
+            coin::take(&mut keys_holder_pot, winner_team_keys_earning, ctx),
+            sender
+        );
+
+        //transfer winner team rose earning to player
+        let rose_holder_pot = table::borrow_mut(&mut season.team_info, player_info.team).rose_holder_pot;
+        transfer::public_transfer(
+            coin::take(&mut rose_holder_pot, winner_team_rose_earning, ctx),
+            sender
+        );
+
+        //transfer affiliate earning to player
+        transfer::public_transfer(
+            coin::from_balance(player_vault.affiliate_vault, ctx),
+            sender
+        );
+
+        //transfer player winning prize to player
+        transfer::public_transfer(
+            coin::from_balance(player_vault.win_vault, ctx),
+            sender
+        );
+
     }
 
     public entry fun start_game(
