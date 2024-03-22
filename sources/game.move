@@ -162,7 +162,7 @@ module fomolove2048::game {
 
         event::emit(GameMoveEvent {
             game_id: object::uid_to_inner(&game.id),
-            direction: direction,
+            direction,
             move_count,
             packed_spaces: *game_board::packed_spaces(&new_board),
             last_tile: *game_board::last_tile(&new_board),
