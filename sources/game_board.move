@@ -1,3 +1,4 @@
+#[allow(unused_const)]
 module fomolove2048::game_board {
     use std::vector;
     

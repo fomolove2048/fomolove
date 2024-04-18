@@ -82,6 +82,7 @@ module fomolove2048::player {
         return player_id
     }
 
+    #[allow(lint(self_transfer))]
     public(friend) fun register_name(
         maintainer: &mut PlayMaintainer,
         fee: vector<Coin<SUI>>,

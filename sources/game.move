@@ -29,9 +29,9 @@ module fomolove2048::game {
     // const DEFAULT_FEE: u64 = 200_000_000;
     const DEFAULT_FEE: u64 = 0;
 
-    const EInvalidPlayer: u64 = 0;
-    const ENotMaintainer: u64 = 1;
-    const ENoBalance: u64 = 2;
+    // const EInvalidPlayer: u64 = 0;
+    // const ENotMaintainer: u64 = 1;
+    // const ENoBalance: u64 = 2;
 
     /// One-Time-Witness for the module.
     struct GAME has drop {}
@@ -122,7 +122,7 @@ module fomolove2048::game {
     }
 
     // PUBLIC ENTRY FUNCTIONS //
-
+    #[allow(lint(self_transfer))]
     public(friend) fun create(
         maintainer: &mut GameMaintainer,
         fee: vector<Coin<SUI>>,
@@ -133,7 +133,6 @@ module fomolove2048::game {
         let (paid, remainder) = merge_and_split(fee, maintainer.fee, ctx);
 
         coin::put(&mut maintainer.balance, paid);
-        transfer::public_transfer(remainder, tx_context::sender(ctx));
         let player = tx_context::sender(ctx);
         let uid = object::new(ctx);
         let random = object::uid_to_bytes(&uid);
@@ -164,6 +163,7 @@ module fomolove2048::game {
         maintainer.game_count = maintainer.game_count + 1;
 
         transfer(game, player);
+        transfer::public_transfer(remainder, player);
     }
 
     public entry fun make_move(game: &mut Game, direction: u64, ctx: &mut TxContext)  {
