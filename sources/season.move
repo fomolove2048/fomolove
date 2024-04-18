@@ -1,8 +1,10 @@
 module fomolove2048::season {
-    use sui::transfer;
     use std::string::String;
     use std::vector;
+    use sui::address;
+
     use sui::pay;
+    use sui::transfer;
     use sui::sui::SUI;
     use sui::balance::{Self, Balance};
     use sui::table::{Self, Table, contains};
@@ -20,6 +22,7 @@ module fomolove2048::season {
     };
     use fomolove2048::keys_calc::sui_rec;
     use fomolove2048::game::{Self, Game, GameMaintainer};
+    use fomolove2048::rose;
 
     const ELowTile: u64 = 1000001;
     const ELowScore: u64 = 1000002;
@@ -31,6 +34,9 @@ module fomolove2048::season {
     const EHaveTeam: u64 = 1000008;
     const ETooManyKeys: u64 = 1000009;
     const ESeasonIsNotStart: u64 = 1000010;
+    const ESeasonIsEnded: u64 = 1000011;
+    const EGameMintedRose: u64 = 1000012;
+    const EGmaeIsNotCurrentSeason: u64 = 1000013;
 
     const DEFAULT_WHITE_POT: u64 = 50;
     const DEFAULT_RED_POT: u64 = 20;
@@ -76,12 +82,15 @@ module fomolove2048::season {
         player_infos: Table<u64, PlayInfoInSeason>, // player info in this season
         team_infos: Table<u64, TeamInfoInSeason>,  // team info in this season
         sn_players: Table<u64, address>, // sn to player address
+        player_sn: Table<address, u64>, // player address to sn
+        games_minted_rose: vector<ID>, // games minted rose
         airdrop_list: vector<u64>, // airdrop list
     }
 
     struct Leaderboard has store, copy, drop {
         max_leaderboard_game_count: u64,
         top_games: vector<TopGame>,
+        winner_game: TopGame,
         min_tile: u64,
         min_score: u64
     }
@@ -161,9 +170,17 @@ module fomolove2048::season {
         let current_time = clock::timestamp_ms(clock);
         let season_id = table::length(&global.season_infos) + 1;
 
+        let temp_address = address::from_bytes(b"temp");
+
         let leaderboard = Leaderboard {
             max_leaderboard_game_count: 50,
             top_games: vector<TopGame>[],
+            winner_game: TopGame {
+                game_id: object::id_from_address(temp_address),
+                leader_address: temp_address,
+                top_tile: 0,
+                score: 0
+            },
             min_tile: 0,
             min_score: 0
         };
@@ -187,6 +204,8 @@ module fomolove2048::season {
             player_infos: table::new<u64, PlayInfoInSeason>(ctx),
             team_infos: table::new<u64, TeamInfoInSeason>(ctx),
             sn_players: table::new<u64, address>(ctx),
+            player_sn: table::new<address, u64>(ctx),
+            games_minted_rose: vector<ID>[],
             airdrop_list: vector<u64>[],
         };
 
@@ -256,10 +275,14 @@ module fomolove2048::season {
     ){
         let player = tx_context::sender(ctx);
         let current_time = clock::timestamp_ms(clock);
+        assert!(season.ended == false, ESeasonIsEnded);
         assert!(current_time >= season.start_time, ESeasonIsNotStart);
 
-        if (current_time > season.end_time && !season.ended){
+        if (current_time > season.end_time){
             end_season(global, season, clock, ctx);
+            let (zero, remainder) = merge_and_split(fee, 0, ctx);
+            transfer::public_transfer(zero, player);
+            transfer::public_transfer(remainder, player);
             return
         };
 
@@ -304,12 +327,15 @@ module fomolove2048::season {
         season.keys_cur = season.keys_cur + keys;
         season.sui_cur = season.sui_cur + paid_value;
 
-        //update player info
-        if (!contains(&season.player_infos, player_id)){
-            //add sn for player in this season
+        //update player sn
+        if (!contains(&season.player_sn, player)){
             let sn = table::length(&season.sn_players) + 1;
             table::add(&mut season.sn_players, sn, player);
+            table::add(&mut season.player_sn, player, sn);
+        };
 
+        //update player info
+        if (!contains(&season.player_infos, player_id)){
             //add player info in this season
             let player_info = PlayInfoInSeason{
                 team: 0u64,
@@ -332,9 +358,7 @@ module fomolove2048::season {
         player_info.team = team;
 
         //if season is actived, dividend
-        if (current_time >= season.start_time && current_time <= season.end_time){
-            allocation_entry_funds(global, season, paid, keys, player_id, affiliate_id, team, ctx);
-        };
+        allocation_entry_funds(global, season, paid, keys, player_id, affiliate_id, team, ctx);
     }
 
     public entry fun withdraw_earnings(
@@ -386,13 +410,49 @@ module fomolove2048::season {
 
     }
 
+    public entry fun airdrop_game(
+        maintainer: &mut GameMaintainer,
+        player_maintainer: &mut PlayMaintainer,
+        global: &mut GlobalConfig,
+        season: &mut Season,
+        airdrop_player: address,
+        team: u64,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ){
+        let player_id = get_player_id(player_maintainer, &airdrop_player);
+        if (!contains(&global.player_vaults, player_id)){
+            let player_info = PlayerVaults{
+                win_vault: balance::zero<SUI>(),
+                affiliate_vault: balance::zero<SUI>(),
+            };
+            table::add(&mut global.player_vaults, player_id, player_info);
+        };
+
+        //get player info in team
+        if (!contains(&season.player_infos, player_id)){
+            //add player info in this season
+            let player_info = PlayInfoInSeason{
+                team,
+                sui_cur: 0u64,
+                keys_cur: 0u64,
+                rose_cur: 0u64,
+                game_count: 0u64,
+                mask: 0u64,
+            };
+            table::add(&mut season.player_infos, player_id, player_info);
+        };
+
+        game::create_airdrop_game(maintainer, vector[], airdrop_player, clock, ctx);
+    }
+
     public entry fun start_game(
         maintainer: &mut GameMaintainer,
         player_maintainer: &mut PlayMaintainer,
         global: &mut GlobalConfig,
         season: &mut Season,
         team: u64,
-        clcok: &Clock,
+        clock: &Clock,
         ctx: &mut TxContext
     ){
         let player = tx_context::sender(ctx);
@@ -405,14 +465,14 @@ module fomolove2048::season {
         assert!(contains(&season.player_infos, player_id), EInvalidPlayer);
         let player_info = table::borrow_mut(&mut season.player_infos, player_id);
 
-        assert!(player_info.keys_cur/10^18 - player_info.game_count >= 1, ENoEnoughKeys);
-        game::create(maintainer, vector[], clcok, ctx);
+        assert!(player_info.keys_cur/10^9 - player_info.game_count >= 1, ENoEnoughKeys);
+        game::create(maintainer, vector[], clock, ctx);
         global.game_count = global.game_count + 1;
         player_info.game_count = player_info.game_count + 1;
         team_info.game_count = team_info.game_count + 1;
     }
 
-    public entry fun submit_game(game: &mut Game, season: &mut Season) {
+    public entry fun submit_game(game: &Game, season: &mut Season) {
         let top_tile = *game::top_tile(game);
         let score = *game::score(game);
         let leaderboard = &mut season.leaderboard;
@@ -431,6 +491,47 @@ module fomolove2048::season {
         };
 
         add_top_game_sorted(leaderboard, top_game);
+    }
+
+    public entry fun mint_rose(
+        player_maintainer: &mut PlayMaintainer,
+        game: &Game,
+        season: &mut Season,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ){
+        //game time
+        assert!(*game::game_created_at(game) >= season.start_time, EGmaeIsNotCurrentSeason);
+        assert!(clock::timestamp_ms(clock) <= season.end_time, ESeasonIsEnded);
+
+        let game_id = game::id(game);
+        assert!(!vector::contains(&season.games_minted_rose, &game_id), EGameMintedRose);
+        vector::push_back(&mut season.games_minted_rose, game_id);
+
+        let game_player = *game::player(game);
+        let player = tx_context::sender(ctx);
+        assert!(game_player == player, EInvalidPlayer);
+
+        let player_id = get_player_id(player_maintainer, &player);
+        assert!(contains(&season.player_infos, player_id), EInvalidPlayer);
+        let player_info = table::borrow_mut(&mut season.player_infos, player_id);
+        rose::mint_to_sender(player_info.team, clock, ctx);
+
+        assert!(contains(&season.team_infos, player_info.team), EInvalidTeam);
+        let team_info = table::borrow_mut(&mut season.team_infos, player_info.team);
+
+        let leaderboard = &mut season.leaderboard;
+        leaderboard.winner_game = TopGame {
+            game_id,
+            leader_address: player,
+            score: *game::score(game),
+            top_tile: *game::top_tile(game)
+        };
+        season.winner_player = player_id;
+        season.winner_team = player_info.team;
+        season.rose_cur = season.rose_cur + 1;
+        player_info.rose_cur = player_info.rose_cur + 1;
+        team_info.rose_cur = team_info.rose_cur + 1;
     }
 
     // INTERNAL FUNCTIONS //

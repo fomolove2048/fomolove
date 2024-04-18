@@ -1,9 +1,11 @@
 
 #[test_only]
 module fomolove2048::game_tests {
+    use sui::clock;
     use sui::test_scenario::{Self, Scenario};
     use sui::sui::SUI;
     use sui::coin::{Self};
+    use sui::tx_context;
 
     use fomolove2048::game::{Self, Game, GameMaintainer};
     use fomolove2048::game_board::{Self, left, up};
@@ -13,6 +15,8 @@ module fomolove2048::game_tests {
 
     fun create_game(scenario: &mut Scenario) {
         let ctx = test_scenario::ctx(scenario);
+        // let ctx = tx_context::dummy();
+        let clock = clock::create_for_testing(ctx);
 
         let maintainer = game::create_maintainer(ctx);
 
@@ -22,9 +26,10 @@ module fomolove2048::game_tests {
             coin::mint_for_testing<SUI>(40_000_000, ctx)
         ];
 
-        game::create(&mut maintainer, coins, ctx);
+        game::create(&mut maintainer, coins, &clock, ctx);
 
         sui::test_utils::destroy<GameMaintainer>(maintainer);
+        clock::destroy_for_testing(clock);
     }
 
     fun test_game_create() {

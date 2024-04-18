@@ -2,8 +2,7 @@ module fomolove2048::game {
     use std::string::{utf8};
     use std::vector;
     use sui::balance::{Self, Balance};
-    use sui::clock;
-    use sui::clock::Clock;
+    use sui::clock::{Self, Clock};
     use sui::coin::{Self, Coin};
     use sui::object::{Self, ID, UID};
     use sui::tx_context::{Self, TxContext, sender};
@@ -30,8 +29,8 @@ module fomolove2048::game {
     const DEFAULT_FEE: u64 = 0;
 
     // const EInvalidPlayer: u64 = 0;
-    // const ENotMaintainer: u64 = 1;
-    // const ENoBalance: u64 = 2;
+    const ENotMaintainer: u64 = 1;
+    const ENoBalance: u64 = 2;
 
     /// One-Time-Witness for the module.
     struct GAME has drop {}
@@ -85,6 +84,7 @@ module fomolove2048::game {
         score: u64
     }
 
+    #[allow(lint(share_owned))]
     fun init(otw: GAME, ctx: &mut TxContext) {
         let keys = vector[
             utf8(b"name"),
@@ -114,11 +114,11 @@ module fomolove2048::game {
 
         display::update_version(&mut display);
 
-        // let maintainer = create_maintainer(ctx);
+        let maintainer = create_maintainer(ctx);
 
         public_transfer(publisher, sender(ctx));
         public_transfer(display, sender(ctx));
-        // transfer::share_object(maintainer);
+        transfer::share_object(maintainer);
     }
 
     // PUBLIC ENTRY FUNCTIONS //
@@ -230,23 +230,69 @@ module fomolove2048::game {
         game.top_tile = game_board::analyze_top_tile(&game.active_board);
     }
 
-    // public entry fun pay_maintainer(maintainer: &mut GameMaintainer, ctx: &mut TxContext) {
-    //     assert!(tx_context::sender(ctx) == maintainer.maintainer_address, ENotMaintainer);
-    //     let amount = balance::value<SUI>(&maintainer.balance);
-    //     assert!(amount > 0, ENoBalance);
-    //     let payment = coin::take(&mut maintainer.balance, amount, ctx);
-    //     transfer::public_transfer(payment, tx_context::sender(ctx));
-    // }
-    //
-    // public entry fun change_maintainer(maintainer: &mut GameMaintainer, new_maintainer: address, ctx: &mut TxContext) {
-    //     assert!(tx_context::sender(ctx) == maintainer.maintainer_address, ENotMaintainer);
-    //     maintainer.maintainer_address = new_maintainer;
-    // }
-    //
-    // public entry fun change_fee(maintainer: &mut GameMaintainer, new_fee: u64, ctx: &mut TxContext) {
-    //     assert!(tx_context::sender(ctx) == maintainer.maintainer_address, ENotMaintainer);
-    //     maintainer.fee = new_fee;
-    // }
+    public entry fun pay_maintainer(maintainer: &mut GameMaintainer, ctx: &mut TxContext) {
+        assert!(tx_context::sender(ctx) == maintainer.maintainer_address, ENotMaintainer);
+        let amount = balance::value<SUI>(&maintainer.balance);
+        assert!(amount > 0, ENoBalance);
+        let payment = coin::take(&mut maintainer.balance, amount, ctx);
+        transfer::public_transfer(payment, tx_context::sender(ctx));
+    }
+
+    public entry fun change_maintainer(maintainer: &mut GameMaintainer, new_maintainer: address, ctx: &mut TxContext) {
+        assert!(tx_context::sender(ctx) == maintainer.maintainer_address, ENotMaintainer);
+        maintainer.maintainer_address = new_maintainer;
+    }
+
+    public entry fun change_fee(maintainer: &mut GameMaintainer, new_fee: u64, ctx: &mut TxContext) {
+        assert!(tx_context::sender(ctx) == maintainer.maintainer_address, ENotMaintainer);
+        maintainer.fee = new_fee;
+    }
+
+    #[allow(lint(self_transfer))]
+    public(friend) fun create_airdrop_game(
+        maintainer: &mut GameMaintainer,
+        fee: vector<Coin<SUI>>,
+        player: address,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ){
+        assert!(tx_context::sender(ctx) == maintainer.maintainer_address, ENotMaintainer);
+        let current_time = clock::timestamp_ms(clock);
+        let (paid, remainder) = merge_and_split(fee, maintainer.fee, ctx);
+
+        coin::put(&mut maintainer.balance, paid);
+        let sender = tx_context::sender(ctx);
+        let uid = object::new(ctx);
+        let random = object::uid_to_bytes(&uid);
+        let initial_game_board = game_board::default(random);
+
+        let score = *game_board::score(&initial_game_board);
+        let top_tile = *game_board::top_tile(&initial_game_board);
+
+        let game = Game {
+            id: uid,
+            game: maintainer.game_count + 1,
+            created_at: current_time,
+            player,
+            move_count: 0,
+            score,
+            top_tile,
+            active_board: initial_game_board,
+            game_over: false,
+        };
+
+        event::emit(NewGameEvent {
+            game_id: object::uid_to_inner(&game.id),
+            player,
+            score,
+            packed_spaces: *game_board::packed_spaces(&initial_game_board)
+        });
+
+        maintainer.game_count = maintainer.game_count + 1;
+
+        transfer(game, player);
+        transfer::public_transfer(remainder, sender);
+    }
  
     // PUBLIC ACCESSOR FUNCTIONS //
 
@@ -274,6 +320,14 @@ module fomolove2048::game {
 
     public fun move_count(game: &Game): &u64 {
         &game.move_count
+    }
+
+    public fun game_over(game: &Game): &bool {
+        &game.game_over
+    }
+
+    public fun game_created_at(game: &Game): &u64 {
+        &game.created_at
     }
 
     // Friend functions

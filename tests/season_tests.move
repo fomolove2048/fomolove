@@ -3,6 +3,7 @@
 module fomolove2048::season_tests {
     use std::option;
     use std::vector;
+    use sui::clock;
 
     use sui::object::ID;
     use sui::sui::SUI;
@@ -19,6 +20,7 @@ module fomolove2048::season_tests {
 
     fun create_game(scenario: &mut Scenario) {
         let ctx = test_scenario::ctx(scenario);
+        let clock = clock::create_for_testing(ctx);
 
         let maintainer = game::create_maintainer(ctx);
 
@@ -28,9 +30,10 @@ module fomolove2048::season_tests {
             coin::mint_for_testing<SUI>(40_000_000, ctx)
         ];
 
-        game::create(&mut maintainer, coins, ctx);
+        game::create(&mut maintainer, coins, &clock, ctx);
 
         sui::test_utils::destroy<GameMaintainer>(maintainer);
+        clock::destroy_for_testing(clock);
     }
 
     fun make_move_if_valid(game: &mut Game, direction: u64, ctx: &mut TxContext) {
