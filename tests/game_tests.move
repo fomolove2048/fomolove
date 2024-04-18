@@ -5,7 +5,7 @@ module fomolove2048::game_tests {
     use sui::sui::SUI;
     use sui::coin::{Self};
 
-    use fomolove2048::game::{Self, Game8192, Game8192Maintainer};
+    use fomolove2048::game::{Self, Game, GameMaintainer};
     use fomolove2048::game_board::{Self, left, up};
 
     const PLAYER: address = @0xCAFE;
@@ -24,7 +24,7 @@ module fomolove2048::game_tests {
 
         game::create(&mut maintainer, coins, ctx);
 
-        sui::test_utils::destroy<Game8192Maintainer>(maintainer);
+        sui::test_utils::destroy<GameMaintainer>(maintainer);
     }
 
     fun test_game_create() {
@@ -35,7 +35,7 @@ module fomolove2048::game_tests {
 
         test_scenario::next_tx(&mut scenario, PLAYER);
         {
-            let game = test_scenario::take_from_sender<Game8192>(&mut scenario);
+            let game = test_scenario::take_from_sender<Game>(&mut scenario);
             
             assert!(game::player(&game) == &PLAYER, 0);
             assert!(game::move_count(&game) == &0, 1);
@@ -59,7 +59,7 @@ module fomolove2048::game_tests {
 
         test_scenario::next_tx(&mut scenario, PLAYER);
         {
-            let game = test_scenario::take_from_sender<Game8192>(&mut scenario);
+            let game = test_scenario::take_from_sender<Game>(&mut scenario);
             
             game::make_move(&mut game, left(), test_scenario::ctx(&mut scenario));
 
@@ -78,7 +78,7 @@ module fomolove2048::game_tests {
 
         test_scenario::next_tx(&mut scenario, PLAYER);
         {
-            let game = test_scenario::take_from_sender<Game8192>(&mut scenario);
+            let game = test_scenario::take_from_sender<Game>(&mut scenario);
             
             let board = game::active_board(&game);
             let space_value = game_board::board_space_at(board, 1, 1);
@@ -114,7 +114,7 @@ module fomolove2048::game_tests {
 
         test_scenario::next_tx(&mut scenario, PLAYER);
         {
-            let game = test_scenario::take_from_sender<Game8192>(&mut scenario);
+            let game = test_scenario::take_from_sender<Game>(&mut scenario);
             game::burn_game(game);
         };
 

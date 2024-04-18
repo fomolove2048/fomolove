@@ -3,7 +3,6 @@ module fomolove2048::season {
     use std::string::String;
     use std::vector;
     use sui::pay;
-    use sui::vec_set::keys;
     use sui::sui::SUI;
     use sui::balance::{Self, Balance};
     use sui::table::{Self, Table, contains};
@@ -21,9 +20,8 @@ module fomolove2048::season {
         update_aff_id
     };
     use fomolove2048::keys_calc::sui_rec;
-    use fomolove2048::game::{Self, Game};
+    use fomolove2048::game::{Self, Game, GameMaintainer};
 
-    const ENotALeader: u64 = 1000000;
     const ELowTile: u64 = 1000001;
     const ELowScore: u64 = 1000002;
     const EInvalidKeys: u64 = 1000003;
@@ -32,6 +30,7 @@ module fomolove2048::season {
     const EInvalidPlayer: u64 = 1000006;
     const ENoEnoughKeys: u64 = 1000007;
     const EHaveTeam: u64 = 1000008;
+    const ETooManyKeys: u64 = 1000009;
 
     const DEFAULT_WHITE_POT: u64 = 50;
     const DEFAULT_RED_POT: u64 = 20;
@@ -56,7 +55,7 @@ module fomolove2048::season {
     const TEAM_RED: u64 = 2;
 
     #[test_only]
-    friend fomolove2048::leaderboard_tests;
+    friend fomolove2048::season_tests;
 
     struct Season has key, store {
         id: UID,
@@ -74,12 +73,12 @@ module fomolove2048::season {
         dividend: Balance<SUI>,
         airdrop: Balance<SUI>,
         leaderboard: Leaderboard,
-        player_info: Table<u64, PlayInfoInSeason>,
-        team_info: Table<u64, TeamInfoInSeason>,
+        player_infos: Table<u64, PlayInfoInSeason>,
+        team_infos: Table<u64, TeamInfoInSeason>,
         airdrop_list: vector<u64>,
     }
 
-    struct Leaderboard has key, store {
+    struct Leaderboard has store, copy, drop {
         max_leaderboard_game_count: u64,
         top_games: vector<TopGame>,
         min_tile: u64,
@@ -95,7 +94,7 @@ module fomolove2048::season {
         mask: u64,
     }
 
-    struct TeamInfoInSeason has store, copy, drop {
+    struct TeamInfoInSeason has store {
         keys_holder_pot: Balance<SUI>,
         rose_holder_pot: Balance<SUI>,
         // player_info: Table<u64, PlayInfoInTeam>,
@@ -105,6 +104,7 @@ module fomolove2048::season {
         sui_cur: u64,
         keys_cur: u64,
         rose_cur: u64,
+        game_count: u64,
     }
     // struct PlayInfoInTeam has store, copy, drop {
     //     sui_cur: u64,
@@ -113,7 +113,7 @@ module fomolove2048::season {
     //     game_count: u64,
     // }
 
-    struct PlayerVaults has store, copy, drop {
+    struct PlayerVaults has store {
         win_vault: Balance<SUI>,
         affiliate_vault: Balance<SUI>,
     }
@@ -183,12 +183,12 @@ module fomolove2048::season {
             dividend: balance::zero<SUI>(),
             airdrop: balance::zero<SUI>(),
             leaderboard,
-            player_info: table::new<u64, PlayInfoInSeason>(ctx),
-            team_info: table::new<u64, TeamInfoInSeason>(ctx),
+            player_infos: table::new<u64, PlayInfoInSeason>(ctx),
+            team_infos: table::new<u64, TeamInfoInSeason>(ctx),
             airdrop_list: vector<u64>[],
         };
 
-        let team_info = TeamInfoInSeason{
+        let team_info_white = TeamInfoInSeason{
             keys_holder_pot: balance::zero<SUI>(),
             rose_holder_pot: balance::zero<SUI>(),
             // player_info: table::new<u64, PlayInfoInTeam>(ctx),
@@ -198,15 +198,28 @@ module fomolove2048::season {
             sui_cur: 0u64,
             keys_cur: 0u64,
             rose_cur: 0u64,
+            game_count: 0u64,
         };
+        table::add(&mut season.team_infos, TEAM_WHITE, team_info_white);
 
-        table::add(&mut season.team_info, TEAM_WHITE, team_info);
-        table::add(&mut season.team_info, TEAM_RED, team_info);
+        let team_info_red = TeamInfoInSeason{
+            keys_holder_pot: balance::zero<SUI>(),
+            rose_holder_pot: balance::zero<SUI>(),
+            // player_info: table::new<u64, PlayInfoInTeam>(ctx),
+            rose_holder: vector<u64>[],
+            pot_per_key: 0u64,
+            pot_per_rose: 0u64,
+            sui_cur: 0u64,
+            keys_cur: 0u64,
+            rose_cur: 0u64,
+            game_count: 0u64,
+        };
+        table::add(&mut season.team_infos, TEAM_RED, team_info_red);
 
         let season_object_id = object::uid_to_inner(&season.id);
         table::add(&mut global.season_infos, season_id, season_object_id);
 
-        transfer::share_object(leaderboard);
+        transfer::share_object(season);
     }
 
     public entry fun register_name(
@@ -242,7 +255,7 @@ module fomolove2048::season {
         let player = tx_context::sender(ctx);
         let current_time = clock::timestamp_ms(clock);
 
-        assert!(keys >= 1 * 10^9 && keys <= 100 * 10^9, EInvalidKeys);
+        assert!(keys >= 1 * 10^9 && keys <= 100 * 10^9 && keys % 10^9 == 0, EInvalidKeys);
         assert!(contains(&global.season_infos, season.season_id), EInvalidSeason);
 
         //get player id, create player vaults if not exist
@@ -259,7 +272,7 @@ module fomolove2048::season {
         let keys_paid = sui_rec((season.keys_cur as u128), (keys as u128));
         let (paid, remainder) = merge_and_split(fee, (keys_paid as u64), ctx);
         // coin::put(&mut season.balance, paid);
-        transfer::public_transfer(remainder, tx_context::sender(ctx));
+        transfer::public_transfer(remainder, player);
 
         //manage affiliate residuals
         let affiliate_id = view_player_id_by_address(player_maintainer, affiliate);
@@ -282,7 +295,7 @@ module fomolove2048::season {
         season.sui_cur = season.sui_cur + coin::value(&paid);
 
         //update player info
-        if (!contains(&season.player_info, player_id)){
+        if (!contains(&season.player_infos, player_id)){
             let player_info = PlayInfoInSeason{
                 team: 0u64,
                 sui_cur: 0u64,
@@ -291,21 +304,25 @@ module fomolove2048::season {
                 game_count: 0u64,
                 mask: 0u64,
             };
-            table::add(&mut season.player_info, player_id, player_info);
+            table::add(&mut season.player_infos, player_id, player_info);
         };
 
-        let player_info = table::borrow_mut(&mut season.player_info, player_id);
+        let player_info = table::borrow_mut(&mut season.player_infos, player_id);
         player_info.sui_cur = player_info.sui_cur + coin::value(&paid);
         player_info.keys_cur = player_info.keys_cur + keys;
         assert!(player_info.team == 0 || player_info.team == team, EHaveTeam);
+        if (season.sui_cur <= 20000 * 10^9 + coin::value(&paid)){
+            assert!(player_info.sui_cur <= 2000 * 10^9, ETooManyKeys);
+        };
         player_info.team = team;
 
         //if season is actived, dividend
         if (current_time >= season.start_time && current_time <= season.end_time){
-            allocation_emtry_funds(global, season, paid, keys, player_id, affiliate_id, team, ctx);
+            paid = allocation_entry_funds(global, season, paid, keys, player_id, affiliate_id, team, ctx);
         } else if (current_time > season.end_time && !season.ended){
             end_season(global, season, clock, ctx);
         };
+        transfer::public_transfer(paid, player);
     }
 
     fun end_season(
@@ -322,7 +339,7 @@ module fomolove2048::season {
         let platform = coin::take<SUI>(&mut global.platform, POT_TO_PLATFORM_RATE/100, ctx);
 
         //get team info
-        let team_info = table::borrow_mut(&mut season.team_info, winner_team);
+        let team_info = table::borrow_mut(&mut season.team_infos, winner_team);
         let keys_holder_prize;
         let rose_holder_prize;
         if (winner_team == TEAM_WHITE){
@@ -340,7 +357,7 @@ module fomolove2048::season {
         //to platform
         coin::put(&mut global.platform, platform);
 
-        let winner_info = table::borrow_mut(&mut season.player_info, winner_player);
+        let winner_info = table::borrow_mut(&mut season.player_infos, winner_player);
         let winner_hold_keys = winner_info.keys_cur;
         //to keys holder
         team_info.pot_per_key = coin::value(&keys_holder_prize) * 1000 / (team_info.keys_cur - winner_hold_keys);
@@ -357,8 +374,8 @@ module fomolove2048::season {
         season.ended = true;
     }
 
-    fun allocation_emtry_funds(
-        global: &GlobalConfig,
+    fun allocation_entry_funds(
+        global: &mut GlobalConfig,
         season: &mut Season,
         paid: Coin<SUI>,
         keys: u64,
@@ -366,13 +383,13 @@ module fomolove2048::season {
         affiliate_id: u64,
         team: u64,
         ctx: &mut TxContext
-    ){
+    ): Coin<SUI>{
         //verify team WHITE or RED
         assert!(team == TEAM_WHITE || team == TEAM_RED, EInvalidTeam);
 
         //dividend
         let paid_amount = coin::value(&paid);
-        let team_info = table::borrow_mut(&mut season.team_info, team);
+        let team_info = table::borrow_mut(&mut season.team_infos, team);
 
         //update team info
         team_info.sui_cur = team_info.sui_cur + paid_amount;
@@ -411,6 +428,8 @@ module fomolove2048::season {
 
         //update masks
         update_masks(season, dividend, keys, player_id);
+
+        paid
     }
 
     fun update_masks(
@@ -426,7 +445,7 @@ module fomolove2048::season {
         // calculate player earning from their own buy (only based on the keys
         // they just bought).  & update player earnings mask
         let earn_player = profit_per_key * keys / 1000;
-        let player_info = table::borrow_mut(&mut season.player_info, player_id);
+        let player_info = table::borrow_mut(&mut season.player_infos, player_id);
         player_info.mask = ((player_info.mask * keys / 1000) - earn_player) + player_info.mask;
     }
 
@@ -453,39 +472,39 @@ module fomolove2048::season {
     }
 
     fun calculates_dividend_earning(
-        season: &mut Season,
+        season: &Season,
         player_id: u64,
     ): u64{
 
-        let play_info = table::borrow_mut(&mut season.player_info, player_id);
+        let play_info = table::borrow(&season.player_infos, player_id);
         return season.mask * play_info.keys_cur / 1000 - play_info.mask
     }
 
     fun calculates_winner_team_keys_earning(
-        season: &mut Season,
+        season: &Season,
         player_id: u64,
     ): u64{
-        let play_info = table::borrow_mut(&mut season.player_info, player_id);
+        let play_info = table::borrow(&season.player_infos, player_id);
         let team = play_info.team;
 
         if ((team != season.winner_team) || (!season.ended)){
             return 0
         } else {
-            return table::borrow_mut(&mut season.team_info, team).pot_per_key * play_info.keys_cur
+            return table::borrow(&season.team_infos, team).pot_per_key * play_info.keys_cur
         }
     }
 
     fun calculates_winner_team_rose_earning(
-        season: &mut Season,
+        season: &Season,
         player_id: u64,
     ): u64{
-        let play_info = table::borrow_mut(&mut season.player_info, player_id);
+        let play_info = table::borrow(&season.player_infos, player_id);
         let team = play_info.team;
 
         if ((team != season.winner_team) || (!season.ended)){
             return 0
         } else {
-            return table::borrow_mut(&mut season.team_info, team).pot_per_rose * play_info.rose_cur
+            return table::borrow(&season.team_infos, team).pot_per_rose * play_info.rose_cur
         }
     }
 
@@ -495,8 +514,6 @@ module fomolove2048::season {
         player_id: u64,
         ctx: &mut TxContext
     ){
-        let player_vault = table::borrow_mut(&mut global.player_vaults, player_id);
-        let player_info = table::borrow_mut(&mut season.player_info, player_id);
         let sender = tx_context::sender(ctx);
 
         let dividend_earning = calculates_dividend_earning(season, player_id);
@@ -508,57 +525,62 @@ module fomolove2048::season {
             coin::take(&mut season.dividend, dividend_earning, ctx),
             sender
         );
+        let player_info = table::borrow_mut(&mut season.player_infos, player_id);
         player_info.mask = player_info.mask + dividend_earning;
 
         //transfer winner team keys earning to player
-        let keys_holder_pot = table::borrow_mut(&mut season.team_info, player_info.team).keys_holder_pot;
+        let keys_holder_pot = &mut table::borrow_mut(&mut season.team_infos, player_info.team).keys_holder_pot;
         transfer::public_transfer(
-            coin::take(&mut keys_holder_pot, winner_team_keys_earning, ctx),
+            coin::take(keys_holder_pot, winner_team_keys_earning, ctx),
             sender
         );
 
         //transfer winner team rose earning to player
-        let rose_holder_pot = table::borrow_mut(&mut season.team_info, player_info.team).rose_holder_pot;
+        let rose_holder_pot = &mut table::borrow_mut(&mut season.team_infos, player_info.team).rose_holder_pot;
         transfer::public_transfer(
-            coin::take(&mut rose_holder_pot, winner_team_rose_earning, ctx),
+            coin::take(rose_holder_pot, winner_team_rose_earning, ctx),
             sender
         );
 
+        let player_vault = table::borrow_mut(&mut global.player_vaults, player_id);
         //transfer affiliate earning to player
         transfer::public_transfer(
-            coin::from_balance(player_vault.affiliate_vault, ctx),
+            coin::from_balance(balance::withdraw_all(&mut player_vault.affiliate_vault), ctx),
             sender
         );
 
         //transfer player winning prize to player
         transfer::public_transfer(
-            coin::from_balance(player_vault.win_vault, ctx),
+            coin::from_balance(balance::withdraw_all(&mut player_vault.win_vault), ctx),
             sender
         );
 
     }
 
     public entry fun start_game(
+        maintainer: &mut GameMaintainer,
         player_maintainer: &mut PlayMaintainer,
         global: &mut GlobalConfig,
         season: &mut Season,
         team: u64,
+        clcok: &Clock,
         ctx: &mut TxContext
     ){
         let player = tx_context::sender(ctx);
         let player_id = get_player_id(player_maintainer, &player);
 
         //get team info
-        let team_info = table::borrow_mut(&mut season.team_info, team);
+        let team_info = table::borrow_mut(&mut season.team_infos, team);
 
         //get player info in team
-        assert!(contains(&season.player_info, player_id), EInvalidPlayer);
-        let player_info = table::borrow_mut(&mut season.player_info, player_id);
+        assert!(contains(&season.player_infos, player_id), EInvalidPlayer);
+        let player_info = table::borrow_mut(&mut season.player_infos, player_id);
 
         assert!(player_info.keys_cur/10^18 - player_info.game_count >= 1, ENoEnoughKeys);
-        game::create(global.game_count, ctx);
+        game::create(maintainer, vector[], clcok, ctx);
         global.game_count = global.game_count + 1;
         player_info.game_count = player_info.game_count + 1;
+        team_info.game_count = team_info.game_count + 1;
     }
 
     public entry fun submit_game(game: &mut Game, season: &mut Season) {

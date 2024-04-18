@@ -4,11 +4,11 @@ module fomolove2048::player {
     use std::string::{Self, String, utf8};
     use sui::table::{Self, Table};
     use std::vector;
+    use sui::coin;
+    use sui::pay;
     use sui::coin::Coin;
     use sui::transfer;
     use sui::sui::SUI;
-
-    use fomolove2048::season::{Self, merge_and_split};
 
     friend fomolove2048::season;
 
@@ -95,7 +95,7 @@ module fomolove2048::player {
 
         let (paid, remainder) = merge_and_split(fee, maintainer.registration_fee, ctx);
         transfer::public_transfer(paid, maintainer.maintainer_address);
-        transfer::public_transfer(remainder, tx_context::sender(ctx));
+        transfer::public_transfer(remainder, player);
 
 
         if (aff_id != 0 && aff_id != play_id){
@@ -106,8 +106,9 @@ module fomolove2048::player {
                   table::add(&mut maintainer.player_id_to_aff_id, play_id, aff_id);
               }
           }
-        } else if (aff_id == play_id) {
-            aff_id = 0;
+        // }
+        // else if (aff_id == play_id) {
+        //     aff_id = 0;
         };
 
         table::add(&mut maintainer.player_id_by_name, name, play_id);
@@ -185,7 +186,7 @@ module fomolove2048::player {
         if (!table::contains(&maintainer.player_id_to_name, player_id)){
             return utf8(b"")
         } else {
-            return *vector::borrow(&maintainer.player_id_to_name, player_id)
+            return *table::borrow(&maintainer.player_id_to_name, player_id)
         }
     }
 
@@ -195,6 +196,16 @@ module fomolove2048::player {
     ): String{
         let player_id= view_player_id_by_address(maintainer, player_address);
         return view_player_actived_name_by_player_id(maintainer, player_id)
+    }
+
+    public fun merge_and_split(
+        coins: vector<Coin<SUI>>, amount: u64, ctx: &mut TxContext
+    ): (Coin<SUI>, Coin<SUI>) {
+        let base = vector::pop_back(&mut coins);
+        pay::join_vec(&mut base, coins);
+        let coin_value = coin::value(&base);
+        assert!(coin_value >= amount, coin_value);
+        (coin::split(&mut base, amount, ctx), base)
     }
 }
 

@@ -6,7 +6,7 @@ module fomolove2048::game_board {
     friend fomolove2048::game_tests;
     
     #[test_only]
-    friend fomolove2048::leaderboard_tests;
+    friend fomolove2048::season_tests;
 
     const LEFT: u64 = 0;
     const RIGHT: u64 = 1;

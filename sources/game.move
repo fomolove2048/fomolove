@@ -1,13 +1,20 @@
 module fomolove2048::game {
     use std::string::{utf8};
+    use std::vector;
+    use sui::balance::{Self, Balance};
+    use sui::clock;
+    use sui::clock::Clock;
+    use sui::coin::{Self, Coin};
     use sui::object::{Self, ID, UID};
     use sui::tx_context::{Self, TxContext, sender};
     use sui::event;
-    use sui::transfer::{transfer, public_transfer};
+    use sui::transfer::{Self, transfer, public_transfer};
 
     
     use sui::package;
     use sui::display;
+    use sui::pay;
+    use sui::sui::SUI;
 
     use fomolove2048::game_board::{Self, GameBoard};
 
@@ -17,11 +24,12 @@ module fomolove2048::game {
     friend fomolove2048::game_tests;
 
     #[test_only]
-    friend fomolove2048::leaderboard_tests;
+    friend fomolove2048::season_tests;
 
     // const DEFAULT_FEE: u64 = 200_000_000;
+    const DEFAULT_FEE: u64 = 0;
 
-    // const EInvalidPlayer: u64 = 0;
+    const EInvalidPlayer: u64 = 0;
     const ENotMaintainer: u64 = 1;
     const ENoBalance: u64 = 2;
 
@@ -31,6 +39,7 @@ module fomolove2048::game {
     struct Game has key, store {
         id: UID,
         game: u64,
+        created_at: u64,
         player: address,
         active_board: GameBoard,
         move_count: u64,
@@ -39,18 +48,18 @@ module fomolove2048::game {
         game_over: bool
     }
 
-    struct GameMove has store {
-        direction: u64,
-        player: address
-    }
-
-    // struct GameMaintainer has key {
-    //     id: UID,
-    //     maintainer_address: address,
-    //     game_count: u64,
-    //     fee: u64,
-    //     balance: Balance<SUI>
+    // struct GameMove has store {
+    //     direction: u64,
+    //     player: address
     // }
+
+    struct GameMaintainer has key {
+        id: UID,
+        maintainer_address: address,
+        game_count: u64,
+        fee: u64,
+        balance: Balance<SUI>
+    }
 
     struct NewGameEvent has copy, drop {
         game_id: ID,
@@ -113,8 +122,18 @@ module fomolove2048::game {
     }
 
     // PUBLIC ENTRY FUNCTIONS //
-    
-    public(friend) fun create(game_count: u64, ctx: &mut TxContext) {
+
+    public(friend) fun create(
+        maintainer: &mut GameMaintainer,
+        fee: vector<Coin<SUI>>,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ) {
+        let current_time = clock::timestamp_ms(clock);
+        let (paid, remainder) = merge_and_split(fee, maintainer.fee, ctx);
+
+        coin::put(&mut maintainer.balance, paid);
+        transfer::public_transfer(remainder, tx_context::sender(ctx));
         let player = tx_context::sender(ctx);
         let uid = object::new(ctx);
         let random = object::uid_to_bytes(&uid);
@@ -125,7 +144,8 @@ module fomolove2048::game {
 
         let game = Game {
             id: uid,
-            game: game_count + 1,
+            game: maintainer.game_count + 1,
+            created_at: current_time,
             player,
             move_count: 0,
             score,
@@ -140,6 +160,8 @@ module fomolove2048::game {
             score,
             packed_spaces: *game_board::packed_spaces(&initial_game_board)
         });
+        
+        maintainer.game_count = maintainer.game_count + 1;
 
         transfer(game, player);
     }
@@ -162,7 +184,7 @@ module fomolove2048::game {
 
         event::emit(GameMoveEvent {
             game_id: object::uid_to_inner(&game.id),
-            direction,
+            direction: direction,
             move_count,
             packed_spaces: *game_board::packed_spaces(&new_board),
             last_tile: *game_board::last_tile(&new_board),
@@ -192,6 +214,7 @@ module fomolove2048::game {
         let Game {  
             id,
             game: _,
+            created_at: _,
             player: _,
             active_board: _,
             move_count: _,
@@ -255,25 +278,25 @@ module fomolove2048::game {
 
     // Friend functions
 
-    // public(friend) fun create_maintainer(ctx: &mut TxContext): GameMaintainer {
-    //     GameMaintainer {
-    //         id: object::new(ctx),
-    //         maintainer_address: sender(ctx),
-    //         game_count: 0,
-    //         fee: DEFAULT_FEE,
-    //         balance: balance::zero<SUI>()
-    //     }
-    // }
+    public(friend) fun create_maintainer(ctx: &mut TxContext): GameMaintainer {
+        GameMaintainer {
+            id: object::new(ctx),
+            maintainer_address: sender(ctx),
+            game_count: 0,
+            fee: DEFAULT_FEE,
+            balance: balance::zero<SUI>()
+        }
+    }
 
-    // public fun merge_and_split(
-    //     coins: vector<Coin<SUI>>, amount: u64, ctx: &mut TxContext
-    // ): (Coin<SUI>, Coin<SUI>) {
-    //     let base = vector::pop_back(&mut coins);
-    //     pay::join_vec(&mut base, coins);
-    //     let coin_value = coin::value(&base);
-    //     assert!(coin_value >= amount, coin_value);
-    //     (coin::split(&mut base, amount, ctx), base)
-    // }
+    public fun merge_and_split(
+        coins: vector<Coin<SUI>>, amount: u64, ctx: &mut TxContext
+    ): (Coin<SUI>, Coin<SUI>) {
+        let base = vector::pop_back(&mut coins);
+        pay::join_vec(&mut base, coins);
+        let coin_value = coin::value(&base);
+        assert!(coin_value >= amount, coin_value);
+        (coin::split(&mut base, amount, ctx), base)
+    }
 
     // public fun merge_coins(
     //     coins: vector<Coin<SUI>>, ctx: &mut TxContext
