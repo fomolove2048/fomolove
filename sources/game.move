@@ -1,6 +1,7 @@
 module fomolove2048::game {
     use std::string::{utf8};
     use std::vector;
+
     use sui::balance::{Self, Balance};
     use sui::clock::{Self, Clock};
     use sui::coin::{Self, Coin};
@@ -9,15 +10,14 @@ module fomolove2048::game {
     use sui::event;
     use sui::transfer::{Self, transfer, public_transfer};
 
-    
     use sui::package;
     use sui::display;
     use sui::pay;
     use sui::sui::SUI;
 
+    use fomolove2048::player::{PlayMaintainer};
+    use fomolove2048::season::{Self, GlobalConfig, Season};
     use fomolove2048::game_board::{Self, GameBoard};
-
-    friend fomolove2048::season;
 
     #[test_only]
     friend fomolove2048::game_tests;
@@ -166,7 +166,48 @@ module fomolove2048::game {
         transfer::public_transfer(remainder, player);
     }
 
-    public entry fun make_move(game: &mut Game, direction: u64, ctx: &mut TxContext)  {
+    public entry fun start_game(
+        maintainer: &mut GameMaintainer,
+        player_maintainer: &mut PlayMaintainer,
+        global: &mut GlobalConfig,
+        season: &mut Season,
+        team: u64,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ){
+
+        create(maintainer, vector[], clock, ctx);
+
+        season::after_start_game(
+            player_maintainer,
+            global,
+            season,
+            team,
+            ctx
+        )
+    }
+
+    public entry fun submit_game_on_leaderboard(
+        game: &mut Game,
+        season: &mut Season
+    ){
+        season::submit_game(
+            season,
+            id(game),
+            *player(game),
+            *top_tile(game),
+            *score(game)
+        );
+    }
+
+    public entry fun make_move(
+        player_maintainer: &mut PlayMaintainer,
+        season: &mut Season,
+        game: &mut Game,
+        direction: u64,
+        clock: &Clock,
+        ctx: &mut TxContext
+    )  {
         let new_board;
         {
             new_board = *&game.active_board;
@@ -208,6 +249,20 @@ module fomolove2048::game {
         game.game_over = game_over;
 
         fix_game(game);
+
+        if (game.top_tile >= 11) {
+            season::mint_rose(
+                player_maintainer,
+                season,
+                id(game),
+                *player(game),
+                *top_tile(game),
+                *score(game),
+                *game_created_at(game),
+                clock,
+                ctx
+            )
+        }
     }
 
     public entry fun burn_game(game: Game)  {
@@ -246,52 +301,6 @@ module fomolove2048::game {
     public entry fun change_fee(maintainer: &mut GameMaintainer, new_fee: u64, ctx: &mut TxContext) {
         assert!(tx_context::sender(ctx) == maintainer.maintainer_address, ENotMaintainer);
         maintainer.fee = new_fee;
-    }
-
-    #[allow(lint(self_transfer))]
-    public(friend) fun create_airdrop_game(
-        maintainer: &mut GameMaintainer,
-        fee: vector<Coin<SUI>>,
-        player: address,
-        clock: &Clock,
-        ctx: &mut TxContext
-    ){
-        assert!(tx_context::sender(ctx) == maintainer.maintainer_address, ENotMaintainer);
-        let current_time = clock::timestamp_ms(clock);
-        let (paid, remainder) = merge_and_split(fee, maintainer.fee, ctx);
-
-        coin::put(&mut maintainer.balance, paid);
-        let sender = tx_context::sender(ctx);
-        let uid = object::new(ctx);
-        let random = object::uid_to_bytes(&uid);
-        let initial_game_board = game_board::default(random);
-
-        let score = *game_board::score(&initial_game_board);
-        let top_tile = *game_board::top_tile(&initial_game_board);
-
-        let game = Game {
-            id: uid,
-            game: maintainer.game_count + 1,
-            created_at: current_time,
-            player,
-            move_count: 0,
-            score,
-            top_tile,
-            active_board: initial_game_board,
-            game_over: false,
-        };
-
-        event::emit(NewGameEvent {
-            game_id: object::uid_to_inner(&game.id),
-            player,
-            score,
-            packed_spaces: *game_board::packed_spaces(&initial_game_board)
-        });
-
-        maintainer.game_count = maintainer.game_count + 1;
-
-        transfer(game, player);
-        transfer::public_transfer(remainder, sender);
     }
  
     // PUBLIC ACCESSOR FUNCTIONS //

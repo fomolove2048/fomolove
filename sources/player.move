@@ -11,6 +11,7 @@ module fomolove2048::player {
     use sui::sui::SUI;
 
     friend fomolove2048::season;
+    friend fomolove2048::game;
 
     const EInvalidPlayerNameLength: u64 = 1000000;
     const EInvalidPlayerNameNoSpace: u64 = 1000001;
