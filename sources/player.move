@@ -12,6 +12,11 @@ module fomolove2048::player {
 
     friend fomolove2048::season;
     friend fomolove2048::game;
+    #[test_only]
+    friend fomolove2048::game_tests;
+
+    #[test_only]
+    friend fomolove2048::season_tests;
 
     const EInvalidPlayerNameLength: u64 = 1000000;
     const EInvalidPlayerNameNoSpace: u64 = 1000001;

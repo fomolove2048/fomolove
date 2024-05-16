@@ -1,7 +1,6 @@
 module fomolove2048::season {
     use std::string::String;
     use std::vector;
-    use fomolove2048::rose::transfer;
     use sui::address;
 
     // use sui::pay;
@@ -19,13 +18,18 @@ module fomolove2048::season {
         PlayMaintainer,
         get_player_id,
         view_player_aff_id,
-        update_aff_id,
-        merge_and_split
+        update_aff_id
     };
     use fomolove2048::keys_calc::sui_rec;
     use fomolove2048::rose;
 
     friend fomolove2048::game;
+
+    #[test_only]
+    friend fomolove2048::game_tests;
+
+    #[test_only]
+    friend fomolove2048::season_tests;
 
 
     const ELowTile: u64 = 1000001;
@@ -64,9 +68,6 @@ module fomolove2048::season {
 
     const TEAM_BLUE: u64 = 1;
     const TEAM_RED: u64 = 2;
-
-    #[test_only]
-    friend fomolove2048::season_tests;
 
     struct Season has key, store {
         id: UID,
