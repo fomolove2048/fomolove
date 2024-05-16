@@ -36,14 +36,32 @@ module fomolove2048::player {
         player_id_to_name_list: Table<u64, vector<String>>
     }
 
-
     fun init(ctx: &mut TxContext) {
         let sender = tx_context::sender(ctx);
 
         let player_maintainer = PlayMaintainer{
             id: object::new(ctx),
             maintainer_address: sender,
-            registration_fee: 20*10^9,
+            registration_fee: 20 * 1000000000,
+            player_id_by_address: table::new<address, u64>(ctx),
+            player_id_by_name: table::new<String, u64>(ctx),
+            player_id_to_aff_id: table::new<u64, u64>(ctx),
+            player_id_to_address: table::new<u64, address>(ctx),
+            player_id_to_name: table::new<u64, String>(ctx),
+            player_id_to_name_list: table::new<u64, vector<String>>(ctx),
+        };
+
+        transfer::share_object(player_maintainer);
+    }
+
+    #[test_only]
+    public(friend) fun init_test(ctx: &mut TxContext) {
+        let sender = tx_context::sender(ctx);
+
+        let player_maintainer = PlayMaintainer{
+            id: object::new(ctx),
+            maintainer_address: sender,
+            registration_fee: 20 * 1000000000,
             player_id_by_address: table::new<address, u64>(ctx),
             player_id_by_name: table::new<String, u64>(ctx),
             player_id_to_aff_id: table::new<u64, u64>(ctx),
@@ -132,11 +150,13 @@ module fomolove2048::player {
         //     aff_id = 0;
         };
 
+        table::add(&mut maintainer.player_id_to_name, play_id, name);
         table::add(&mut maintainer.player_id_by_name, name, play_id);
-        let name_list = *table::borrow(&maintainer.player_id_to_name_list, play_id);
-        vector::push_back(&mut name_list, name);
-        table::remove(&mut maintainer.player_id_to_name_list, play_id);
-        table::add(&mut maintainer.player_id_to_name_list, play_id, name_list);
+        if (!table::contains(&maintainer.player_id_to_name_list, play_id)){
+            table::add(&mut maintainer.player_id_to_name_list, play_id, vector[]);
+        };
+        let name_list = table::borrow_mut(&mut maintainer.player_id_to_name_list, play_id);
+        vector::push_back(name_list, name);
     }
 
     public(friend) fun update_aff_id(

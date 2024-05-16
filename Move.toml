@@ -1,7 +1,7 @@
 [package]
 name = "fomolove2048"
 version = "0.0.1"
-published-at = "0x2db3fed256098e3046ea644d2f718e9629d570ae22ece9d0be2ef3c7c1627768"
+#published-at = "0x2db3fed256098e3046ea644d2f718e9629d570ae22ece9d0be2ef3c7c1627768"
 
 [dependencies]
 Sui = { local = "../sui/crates/sui-framework/packages/sui-framework" }

@@ -97,13 +97,50 @@ module fomolove2048::game {
         ];
 
         let values = vector[
-            utf8(b"Fomolove 2048"),
-            utf8(b"https://sui8192.s3.amazonaws.com/{top_tile}.png"),
-            utf8(b"Sui 8192 is a fun, 100% on-chain game. Combine the tiles to get a high score!"),
-            utf8(b"https://ethoswallet.github.io/Sui8192/"),
-            utf8(b"Fomolove 2048"),
-            utf8(b"https://sui8192.s3.amazonaws.com/sui-8192.png"),
-            utf8(b"Fomolove2048")
+            utf8(b"FoMoney"),
+            utf8(b"<2-Chain>"),
+            utf8(b"FoMoney is a fully onchain game. Buy Key and combine the tiles to win BIG!"),
+            utf8(b"<https://fomoney.io>"),
+            utf8(b"FoMoney"),
+            utf8(b"<logo.png>"),
+            utf8(b"FoMoney")
+        ];
+
+        let publisher = package::claim(otw, ctx);
+
+        let display = display::new_with_fields<Game>(
+            &publisher, keys, values, ctx
+        );
+
+        display::update_version(&mut display);
+
+        // let maintainer = create_maintainer(ctx);
+
+        public_transfer(publisher, sender(ctx));
+        public_transfer(display, sender(ctx));
+        // transfer::share_object(maintainer);
+    }
+
+    #[test_only]
+    public(friend) fun init_test(otw: GAME, ctx: &mut TxContext) {
+        let keys = vector[
+            utf8(b"name"),
+            utf8(b"image_url"),
+            utf8(b"description"),
+            utf8(b"project_url"),
+            utf8(b"project_name"),
+            utf8(b"project_image_url"),
+            utf8(b"creator"),
+        ];
+
+        let values = vector[
+            utf8(b"FoMoney"),
+            utf8(b"<2-Chain>"),
+            utf8(b"FoMoney is a fully onchain game. Buy Key and combine the tiles to win BIG!"),
+            utf8(b"<https://fomoney.io>"),
+            utf8(b"FoMoney"),
+            utf8(b"<logo.png>"),
+            utf8(b"FoMoney")
         ];
 
         let publisher = package::claim(otw, ctx);
@@ -171,7 +208,6 @@ module fomolove2048::game {
         player_maintainer: &mut PlayMaintainer,
         global: &mut GlobalConfig,
         season: &mut Season,
-        team: u64,
         clock: &Clock,
         ctx: &mut TxContext
     ){
@@ -182,7 +218,6 @@ module fomolove2048::game {
             player_maintainer,
             global,
             season,
-            team,
             ctx
         )
     }

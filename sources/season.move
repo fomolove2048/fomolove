@@ -165,6 +165,22 @@ module fomolove2048::season {
         transfer::share_object(global);
     }
 
+    #[test_only]
+    public(friend) fun init_test(ctx: &mut TxContext) {
+        let sender = tx_context::sender(ctx);
+
+        let global = GlobalConfig{
+            id: object::new(ctx),
+            maintainer: sender,
+            game_count: 0u64,
+            platform: balance::zero<SUI>(),
+            season_infos: table::new<u64, ID>(ctx),
+            player_vaults: table::new<u64, PlayerVaults>(ctx)
+        };
+
+        transfer::share_object(global);
+    }
+
     // ENTRY FUNCTIONS //
     public entry fun create_season_entry(
         global:&mut GlobalConfig,
@@ -178,8 +194,8 @@ module fomolove2048::season {
     }
 
     public entry fun register_name(
-        global: &mut GlobalConfig,
         maintainer: &mut PlayMaintainer,
+        global: &mut GlobalConfig,
         fee: Coin<SUI>,
         name: String,
         aff_id: u64,
@@ -221,7 +237,7 @@ module fomolove2048::season {
             return
         };
 
-        assert!(keys >= 1 * 10^9 && keys <= 100 * 10^9 && keys % 10^9 == 0, EInvalidKeys);
+        assert!(keys >= 1000000000 && keys <= 100 * 1000000000 && keys % 1000000000 == 0, EInvalidKeys);
         assert!(contains(&global.season_infos, season.season_id), EInvalidSeason);
 
         //get player id, create player vaults if not exist
@@ -263,6 +279,12 @@ module fomolove2048::season {
         season.keys_cur = season.keys_cur + keys;
         season.sui_cur = season.sui_cur + paid_value;
 
+        //update season winner
+        if (season.rose_cur == 0){
+            season.winner_team = team;
+            season.winner_player = player_id;
+        };
+
         //update player sn
         if (!contains(&season.player_sn, player)){
             let sn = table::length(&season.sn_players) + 1;
@@ -286,8 +308,8 @@ module fomolove2048::season {
 
         let player_info = table::borrow_mut(&mut season.player_infos, player_id);
         player_info.sui_cur = player_info.sui_cur + paid_value;
-        if (season.sui_cur <= 20000 * 10^9 + paid_value){
-            assert!(player_info.sui_cur <= 2000 * 10^9, ETooManyKeys);
+        if (season.sui_cur <= 20000 * 10000000000 + paid_value){
+            assert!(player_info.sui_cur <= 2000 * 10000000000, ETooManyKeys);
         };
         player_info.keys_cur = player_info.keys_cur + keys;
         assert!(player_info.team == 0 || player_info.team == team, EHaveTeam);
@@ -370,7 +392,7 @@ module fomolove2048::season {
     //     assert!(contains(&season.player_infos, player_id), EInvalidPlayer);
     //     let player_info = table::borrow_mut(&mut season.player_infos, player_id);
     //
-    //     assert!(player_info.keys_cur/10^9 - player_info.game_count >= 1, ENoEnoughKeys);
+    //     assert!(player_info.keys_cur/10000000000 - player_info.game_count >= 1, ENoEnoughKeys);
     //     game::create(maintainer, vector[], clock, ctx);
     //     global.game_count = global.game_count + 1;
     //     player_info.game_count = player_info.game_count + 1;
@@ -383,20 +405,19 @@ module fomolove2048::season {
         player_maintainer: &mut PlayMaintainer,
         global: &mut GlobalConfig,
         season: &mut Season,
-        team: u64,
         ctx: &TxContext
     ){
         let player = tx_context::sender(ctx);
         let player_id = get_player_id(player_maintainer, &player);
 
-        //get team info
-        let team_info = table::borrow_mut(&mut season.team_infos, team);
-
         //get player info in team
         assert!(contains(&season.player_infos, player_id), EInvalidPlayer);
         let player_info = table::borrow_mut(&mut season.player_infos, player_id);
 
-        assert!(player_info.keys_cur/10^9 - player_info.game_count >= 1, ENoEnoughKeys);
+        //get team info
+        let team_info = table::borrow_mut(&mut season.team_infos, player_info.team);
+
+        assert!(player_info.keys_cur/10000000000 - player_info.game_count >= 1, ENoEnoughKeys);
         global.game_count = global.game_count + 1;
         player_info.game_count = player_info.game_count + 1;
         team_info.game_count = team_info.game_count + 1;
@@ -489,7 +510,7 @@ module fomolove2048::season {
         let current_time = clock::timestamp_ms(clock);
         let season_id = table::length(&global.season_infos) + 1;
 
-        let temp_address = address::from_bytes(b"temp");
+        let temp_address = @0x0;
 
         let leaderboard = Leaderboard {
             max_leaderboard_game_count: 50,
@@ -632,8 +653,13 @@ module fomolove2048::season {
 
         //to rose holder
         let winner_hold_rose = winner_info.rose_cur;
-        team_info.pot_per_rose = coin::value(&rose_holder_prize) * 1000 / (team_info.rose_cur - winner_hold_rose);
-        coin::put(&mut team_info.rose_holder_pot, rose_holder_prize);
+        if (team_info.rose_cur > 0) {
+            team_info.pot_per_rose = coin::value(&rose_holder_prize) * 1000 / (team_info.rose_cur - winner_hold_rose);
+            coin::put(&mut team_info.rose_holder_pot, rose_holder_prize);
+        } else {
+            team_info.pot_per_rose = 0;
+            coin::put(&mut global.platform, rose_holder_prize);
+        };
 
         //to next season
         create_season(global, next_season_pot, clock, ctx);
