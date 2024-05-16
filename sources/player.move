@@ -17,6 +17,7 @@ module fomolove2048::player {
     const EInvalidPlayerNameNoSpace: u64 = 1000001;
     const EInvalidPlayerName: u64 = 1000002;
     const EInvalidAffiliateId: u64 = 1000003;
+    const EInvalidNoPermission: u64 = 1000004;
 
     struct PlayMaintainer has key {
         id: UID,
@@ -25,6 +26,7 @@ module fomolove2048::player {
         player_id_by_address: Table<address, u64>,
         player_id_by_name: Table<String, u64>,
         player_id_to_aff_id: Table<u64, u64>,
+        player_id_to_address: Table<u64, address>,
         player_id_to_name: Table<u64, String>,
         player_id_to_name_list: Table<u64, vector<String>>
     }
@@ -40,11 +42,22 @@ module fomolove2048::player {
             player_id_by_address: table::new<address, u64>(ctx),
             player_id_by_name: table::new<String, u64>(ctx),
             player_id_to_aff_id: table::new<u64, u64>(ctx),
+            player_id_to_address: table::new<u64, address>(ctx),
             player_id_to_name: table::new<u64, String>(ctx),
             player_id_to_name_list: table::new<u64, vector<String>>(ctx),
         };
 
         transfer::share_object(player_maintainer);
+    }
+
+    public entry fun modify_registration_fee(
+        maintainer: &mut PlayMaintainer,
+        fee: u64,
+        ctx: &mut TxContext
+    ){
+        let sender = tx_context::sender(ctx);
+        assert!(sender == maintainer.maintainer_address, EInvalidNoPermission);
+        maintainer.registration_fee = fee;
     }
 
     public fun check_id_name_valid(
@@ -79,6 +92,7 @@ module fomolove2048::player {
         }else{
             player_id = table::length(&maintainer.player_id_by_address) + 1;
             table::add(&mut maintainer.player_id_by_address, *player, player_id);
+            table::add(&mut maintainer.player_id_to_address, player_id, *player);
         };
         return player_id
     }
@@ -86,7 +100,7 @@ module fomolove2048::player {
     #[allow(lint(self_transfer))]
     public(friend) fun register_name(
         maintainer: &mut PlayMaintainer,
-        fee: vector<Coin<SUI>>,
+        fee: Coin<SUI>,
         name: String,
         aff_id: u64,
         ctx: &mut TxContext
@@ -95,9 +109,9 @@ module fomolove2048::player {
         let player = tx_context::sender(ctx);
         let play_id = get_player_id(maintainer, &player);
 
-        let (paid, remainder) = merge_and_split(fee, maintainer.registration_fee, ctx);
+        let paid = coin::split(&mut fee, maintainer.registration_fee, ctx);
         transfer::public_transfer(paid, maintainer.maintainer_address);
-        transfer::public_transfer(remainder, player);
+        transfer::public_transfer(fee, player);
 
 
         if (aff_id != 0 && aff_id != play_id){
@@ -145,6 +159,17 @@ module fomolove2048::player {
             return 0
         } else {
             return *table::borrow(&maintainer.player_id_by_address, player_address)
+        }
+    }
+
+    public fun view_player_address_by_id(
+        maintainer: &PlayMaintainer,
+        player_id: u64
+    ): address{
+        if (!table::contains(&maintainer.player_id_to_address, player_id)){
+            return @0x0
+        } else {
+            return *table::borrow(&maintainer.player_id_to_address, player_id)
         }
     }
 
@@ -200,7 +225,7 @@ module fomolove2048::player {
         return view_player_actived_name_by_player_id(maintainer, player_id)
     }
 
-    public fun merge_and_split(
+    public(friend) fun merge_and_split(
         coins: vector<Coin<SUI>>, amount: u64, ctx: &mut TxContext
     ): (Coin<SUI>, Coin<SUI>) {
         let base = vector::pop_back(&mut coins);
