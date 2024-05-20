@@ -97,10 +97,10 @@ module fomolove2048::season_tests {
         //check keys
         test_scenario::next_tx(scenario, PLAYER);
         {
-            let cur_keys = fomolove2048::keys_calc::keys(1000000000);
+            let cur_keys = fomolove2048::keys_calc::keys(100000*1000000000);
             std::debug::print(&cur_keys);
 
-            let cur_sui = fomolove2048::keys_calc::sui(1000000000);
+            let cur_sui = fomolove2048::keys_calc::sui(2000000*1000000000);
             std::debug::print(&cur_sui);
         };
 

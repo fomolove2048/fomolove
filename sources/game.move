@@ -63,6 +63,7 @@ module fomolove2048::game {
     struct NewGameEvent has copy, drop {
         game_id: ID,
         player: address,
+        team: u64,
         score: u64,
         packed_spaces: u64
     }
@@ -163,6 +164,7 @@ module fomolove2048::game {
     fun create(
         // maintainer: &mut GameMaintainer,
         // fee: vector<Coin<SUI>>,
+        team: u64,
         clock: &Clock,
         ctx: &mut TxContext
     ) {
@@ -193,6 +195,7 @@ module fomolove2048::game {
         event::emit(NewGameEvent {
             game_id: object::uid_to_inner(&game.id),
             player,
+            team,
             score,
             packed_spaces: *game_board::packed_spaces(&initial_game_board)
         });
@@ -211,15 +214,14 @@ module fomolove2048::game {
         clock: &Clock,
         ctx: &mut TxContext
     ){
-
-        create(/*maintainer, vector[], */clock, ctx);
-
-        season::after_start_game(
+        let team = season::after_start_game(
             player_maintainer,
             global,
             season,
             ctx
-        )
+        );
+
+        create(/*maintainer, vector[], */team, clock, ctx);
     }
 
     public entry fun submit_game_on_leaderboard(

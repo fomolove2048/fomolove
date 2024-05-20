@@ -44,6 +44,7 @@ module fomolove2048::season {
     const ESeasonIsNotStart: u64 = 1000010;
     const ESeasonIsEnded: u64 = 1000011;
     const ECanNotCreateSeason: u64 = 1000012;
+    const ECanNotChange: u64 = 1000013;
     // const EGameMintedRose: u64 = 1000012;
     // const EGmaeIsNotCurrentSeason: u64 = 1000013;
 
@@ -191,6 +192,29 @@ module fomolove2048::season {
         let sender = tx_context::sender(ctx);
         assert!(global.maintainer == sender, ECanNotCreateSeason);
         create_season(global, init_pot, clock, ctx);
+    }
+
+    public entry fun create_season_from_last_season_entry(
+        global:&mut GlobalConfig,
+        last_season: &mut Season,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ) {
+        assert!(last_season.ended, EInvalidSeason);
+        let init_pot = coin::from_balance(balance::withdraw_all(&mut last_season.pot), ctx);
+        let sender = tx_context::sender(ctx);
+        assert!(global.maintainer == sender, ECanNotCreateSeason);
+        create_season(global, init_pot, clock, ctx);
+    }
+
+    public entry fun transfer_maintainer_entry(
+        global:&mut GlobalConfig,
+        new_maintainer: address,
+        ctx: &mut TxContext
+    ) {
+        let sender = tx_context::sender(ctx);
+        assert!(global.maintainer == sender, ECanNotChange);
+        global.maintainer = new_maintainer;
     }
 
     public entry fun register_name(
@@ -345,6 +369,7 @@ module fomolove2048::season {
         player_info.mask = player_info.mask + dividend_earning;
 
         //transfer winner team keys earning to player
+        assert!(player_info.team != 0, EInvalidTeam);
         let keys_holder_pot = &mut table::borrow_mut(&mut season.team_infos, player_info.team).keys_holder_pot;
         transfer::public_transfer(
             coin::take(keys_holder_pot, winner_team_keys_earning, ctx),
@@ -406,7 +431,7 @@ module fomolove2048::season {
         global: &mut GlobalConfig,
         season: &mut Season,
         ctx: &TxContext
-    ){
+    ) : u64 {
         let player = tx_context::sender(ctx);
         let player_id = get_player_id(player_maintainer, &player);
 
@@ -415,12 +440,15 @@ module fomolove2048::season {
         let player_info = table::borrow_mut(&mut season.player_infos, player_id);
 
         //get team info
+        assert!(player_info.team != 0, EInvalidTeam);
         let team_info = table::borrow_mut(&mut season.team_infos, player_info.team);
 
         assert!(player_info.keys_cur/10000000000 - player_info.game_count >= 1, ENoEnoughKeys);
         global.game_count = global.game_count + 1;
         player_info.game_count = player_info.game_count + 1;
         team_info.game_count = team_info.game_count + 1;
+
+        player_info.team
     }
 
     public(friend) fun submit_game(
@@ -589,6 +617,13 @@ module fomolove2048::season {
         clock: &Clock,
         ctx: &mut TxContext
     ){
+
+        season.ended = true;
+
+        if (season.rose_cur == 0  || season.winner_team == 0){
+            return
+        };
+
         let winner_team = season.winner_team;
         let winner_player = season.winner_player;
 
@@ -599,11 +634,11 @@ module fomolove2048::season {
             season_pot_value * POT_TO_WINNER_PRIZE_RATE / 100,
             ctx
         );
-        let next_season_pot = coin::take<SUI>(
-            &mut season.pot,
-            season_pot_value * POT_TO_NEXT_SEASON_POT_RATE / 100,
-            ctx
-        );
+        // let next_season_pot = coin::take<SUI>(
+        //     &mut season.pot,
+        //     season_pot_value * POT_TO_NEXT_SEASON_POT_RATE / 100,
+        //     ctx
+        // );
         let platform = coin::take<SUI>(
             &mut season.pot,
             season_pot_value * POT_TO_PLATFORM_RATE / 100,
@@ -611,6 +646,7 @@ module fomolove2048::season {
         );
 
         //get team info
+        assert!(winner_team != 0, EInvalidTeam);
         let team_info = table::borrow_mut(&mut season.team_infos, winner_team);
         let keys_holder_prize;
         let rose_holder_prize;
@@ -662,9 +698,8 @@ module fomolove2048::season {
         };
 
         //to next season
-        create_season(global, next_season_pot, clock, ctx);
+        // create_season(global, next_season_pot, clock, ctx);
 
-        season.ended = true;
     }
 
     fun allocation_entry_funds(
@@ -789,6 +824,9 @@ module fomolove2048::season {
         };
 
         let winner_team_info = table::borrow(&season.team_infos, winner_team);
+        if (winner_team_info.rose_cur == 0) {
+            return 0
+        };
         let keys_holder_prize_value = 0;
         let season_pot_value = balance::value(&season.pot);
 
@@ -819,6 +857,9 @@ module fomolove2048::season {
         };
 
         let winner_team_info = table::borrow(&season.team_infos, winner_team);
+        if (winner_team_info.rose_cur == 0) {
+            return 0
+        };
         let rose_holder_prize_value = 0;
         let season_pot_value = balance::value(&season.pot);
 
