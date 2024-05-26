@@ -45,13 +45,13 @@ module fomolove2048::rose {
         ];
 
         let values = vector[
-            utf8(b"Fomolove 2048"),
-            utf8(b"https://sui8192.s3.amazonaws.com/{top_tile}.png"),
-            utf8(b"Sui 8192 is a fun, 100% on-chain game. Combine the tiles to get a high score!"),
-            utf8(b"https://ethoswallet.github.io/Sui8192/"),
-            utf8(b"Fomolove 2048"),
-            utf8(b"https://sui8192.s3.amazonaws.com/sui-8192.png"),
-            utf8(b"Fomolove2048")
+            utf8(b"FoMoney2048"),
+            utf8(b"https://i.postimg.cc/vBDyR7gc/me11.png"),
+            utf8(b"FoMoney is a fully onchain game. Buy Key and combine the tiles to win BIG!"),
+            utf8(b"https://fomoney.io"),
+            utf8(b"FoMoney"),
+            utf8(b"https://i.postimg.cc/vBDyR7gc/me11.png"),
+            utf8(b"FoMoney")
         ];
 
         let publisher = package::claim(otw, ctx);

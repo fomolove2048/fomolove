@@ -1,9 +1,7 @@
 module fomolove2048::season {
     use std::string::String;
     use std::vector;
-    use sui::address;
 
-    // use sui::pay;
     use sui::transfer;
     use sui::sui::SUI;
     use sui::balance::{Self, Balance};
@@ -18,7 +16,7 @@ module fomolove2048::season {
         PlayMaintainer,
         get_player_id,
         view_player_aff_id,
-        update_aff_id
+        update_aff_id, view_player_id_by_address
     };
     use fomolove2048::keys_calc::sui_rec;
     use fomolove2048::rose;
@@ -31,6 +29,7 @@ module fomolove2048::season {
     #[test_only]
     friend fomolove2048::season_tests;
 
+    const SUI_DECIMALS:u64 = 1000000000;
 
     const ELowTile: u64 = 1000001;
     const ELowScore: u64 = 1000002;
@@ -261,7 +260,7 @@ module fomolove2048::season {
             return
         };
 
-        assert!(keys >= 1000000000 && keys <= 100 * 1000000000 && keys % 1000000000 == 0, EInvalidKeys);
+        assert!(keys >= SUI_DECIMALS && keys <= 100 * SUI_DECIMALS && keys % SUI_DECIMALS == 0, EInvalidKeys);
         assert!(contains(&global.season_infos, season.season_id), EInvalidSeason);
 
         //get player id, create player vaults if not exist
@@ -332,8 +331,8 @@ module fomolove2048::season {
 
         let player_info = table::borrow_mut(&mut season.player_infos, player_id);
         player_info.sui_cur = player_info.sui_cur + paid_value;
-        if (season.sui_cur <= 20000 * 10000000000 + paid_value){
-            assert!(player_info.sui_cur <= 2000 * 10000000000, ETooManyKeys);
+        if (season.sui_cur <= 20000 * SUI_DECIMALS + paid_value){
+            assert!(player_info.sui_cur <= 2000 * SUI_DECIMALS, ETooManyKeys);
         };
         player_info.keys_cur = player_info.keys_cur + keys;
         assert!(player_info.team == 0 || player_info.team == team, EHaveTeam);
@@ -350,7 +349,7 @@ module fomolove2048::season {
         ctx: &mut TxContext
     ){
         let sender = tx_context::sender(ctx);
-        let player_id = get_player_id(player_maintainer, &sender);
+        let player_id = view_player_id_by_address(player_maintainer, sender);
         if (!contains(&season.player_infos, player_id)){
             //play is not in this season
             return
@@ -408,7 +407,7 @@ module fomolove2048::season {
     //     ctx: &mut TxContext
     // ){
     //     let player = tx_context::sender(ctx);
-    //     let player_id = get_player_id(player_maintainer, &player);
+    //     let player_id = view_player_id_by_address(player_maintainer, player);
     //
     //     //get team info
     //     let team_info = table::borrow_mut(&mut season.team_infos, team);
@@ -417,7 +416,7 @@ module fomolove2048::season {
     //     assert!(contains(&season.player_infos, player_id), EInvalidPlayer);
     //     let player_info = table::borrow_mut(&mut season.player_infos, player_id);
     //
-    //     assert!(player_info.keys_cur/10000000000 - player_info.game_count >= 1, ENoEnoughKeys);
+    //     assert!(player_info.keys_cur/SUI_DECIMALS - player_info.game_count >= 1, ENoEnoughKeys);
     //     game::create(maintainer, vector[], clock, ctx);
     //     global.game_count = global.game_count + 1;
     //     player_info.game_count = player_info.game_count + 1;
@@ -433,7 +432,7 @@ module fomolove2048::season {
         ctx: &TxContext
     ) : u64 {
         let player = tx_context::sender(ctx);
-        let player_id = get_player_id(player_maintainer, &player);
+        let player_id = view_player_id_by_address(player_maintainer, player);
 
         //get player info in team
         assert!(contains(&season.player_infos, player_id), EInvalidPlayer);
@@ -443,7 +442,7 @@ module fomolove2048::season {
         assert!(player_info.team != 0, EInvalidTeam);
         let team_info = table::borrow_mut(&mut season.team_infos, player_info.team);
 
-        assert!(player_info.keys_cur/10000000000 - player_info.game_count >= 1, ENoEnoughKeys);
+        assert!(player_info.keys_cur/SUI_DECIMALS - player_info.game_count >= 1, ENoEnoughKeys);
         global.game_count = global.game_count + 1;
         player_info.game_count = player_info.game_count + 1;
         team_info.game_count = team_info.game_count + 1;
@@ -496,7 +495,7 @@ module fomolove2048::season {
             return
         };
 
-        let player_id = get_player_id(player_maintainer, &game_player);
+        let player_id = view_player_id_by_address(player_maintainer, game_player);
         //EInvalidPlayer
         if (!contains(&season.player_infos, player_id)){
             return
@@ -777,7 +776,7 @@ module fomolove2048::season {
         // they just bought).  & update player earnings mask
         let earn_player = profit_per_key * keys / 1000;
         let player_info = table::borrow_mut(&mut season.player_infos, player_id);
-        player_info.mask = ((player_info.mask * keys / 1000) - earn_player) + player_info.mask;
+        player_info.mask = ((season.mask * keys / 1000) - earn_player) + player_info.mask;
     }
 
     fun get_dividend_amount(
@@ -1017,7 +1016,7 @@ module fomolove2048::season {
         u64, u64, u64, u64, u64, u64, u64, u64, address
     ) {
         let player_sn = get_sn_by_address(season, address);
-        let player_id = get_player_id(player_maintainer, &address);
+        let player_id = view_player_id_by_address(player_maintainer, address);
         let player_info = table::borrow(&season.player_infos, player_id);
         let dividend_earning = calculates_dividend_earning(season, player_id);
         let winner_team_keys_earning = pre_calculates_winner_team_keys_earning(season, player_id);
@@ -1047,7 +1046,7 @@ module fomolove2048::season {
     ): (
         u64, u64
     ){
-        let player_id = get_player_id(player_maintainer, &address);
+        let player_id = view_player_id_by_address(player_maintainer, address);
         let player_vault = table::borrow(&global.player_vaults, player_id);
 
         let referral_reward = balance::value(&player_vault.affiliate_vault);
@@ -1123,6 +1122,16 @@ module fomolove2048::season {
             i = i + 1;
         };
         season_list
+    }
+
+    public fun get_taem_by_player_address(
+        player_maintainer: &mut PlayMaintainer,
+        season: &Season,
+        address: address
+    ): u64 {
+        let player_id = view_player_id_by_address(player_maintainer, address);
+        let player_info = table::borrow(&season.player_infos, player_id);
+        player_info.team
     }
 
     // TEST FUNCTIONS //

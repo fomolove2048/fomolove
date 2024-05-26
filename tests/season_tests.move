@@ -32,13 +32,13 @@ module fomolove2048::season_tests {
         let clock = clock::create_for_testing(ctx);
 
         let ctx = test_scenario::ctx(scenario);
-        let test_coin = coin::mint_for_testing<SUI>(200*10000000000, ctx);
+        let test_coin = coin::mint_for_testing<SUI>(200*1000000000, ctx);
 
         let ctx = test_scenario::ctx(scenario);
-        let test_coin2 = coin::mint_for_testing<SUI>(2000*10000000000, ctx);
+        let test_coin2 = coin::mint_for_testing<SUI>(2000*1000000000, ctx);
 
         let ctx = test_scenario::ctx(scenario);
-        let test_coin3 = coin::mint_for_testing<SUI>(20000*10000000000, ctx);
+        let test_coin3 = coin::mint_for_testing<SUI>(20000*1000000000, ctx);
         //create a season
         test_scenario::next_tx(scenario, ADMIN);
         {
@@ -100,8 +100,15 @@ module fomolove2048::season_tests {
             let cur_keys = fomolove2048::keys_calc::keys(100000*1000000000);
             std::debug::print(&cur_keys);
 
-            let cur_sui = fomolove2048::keys_calc::sui(2000000*1000000000);
+            cur_keys = fomolove2048::keys_calc::keys(150000000);
+            std::debug::print(&cur_keys);
+
+            let cur_sui = fomolove2048::keys_calc::sui(1*1000000000);
             std::debug::print(&cur_sui);
+
+
+            cur_keys = fomolove2048::keys_calc::keys(0);
+            std::debug::print(&cur_keys);
         };
 
         //PLAYER2 buy keys
@@ -199,7 +206,7 @@ module fomolove2048::season_tests {
         let clock = clock::create_for_testing(ctx);
 
         let ctx = test_scenario::ctx(scenario);
-        let test_coin = coin::mint_for_testing<SUI>(200*10000000000, ctx);
+        let test_coin = coin::mint_for_testing<SUI>(200*1000000000, ctx);
 
         //create a season
         test_scenario::next_tx(scenario, PLAYER);

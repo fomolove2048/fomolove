@@ -40,6 +40,7 @@ module fomolove2048::game {
         // game: u64,
         created_at: u64,
         player: address,
+        team: u64,
         active_board: GameBoard,
         move_count: u64,
         score: u64,
@@ -70,6 +71,7 @@ module fomolove2048::game {
 
     struct GameMoveEvent has copy, drop {
         game_id: ID,
+        team: u64,
         direction: u64,
         move_count: u64,
         packed_spaces: u64,
@@ -81,6 +83,7 @@ module fomolove2048::game {
 
     struct GameOverEvent has copy, drop {
         game_id: ID,
+        team: u64,
         top_tile: u64,
         score: u64
     }
@@ -99,11 +102,11 @@ module fomolove2048::game {
 
         let values = vector[
             utf8(b"FoMoney"),
-            utf8(b"<2-Chain>"),
+            utf8(b"https://peach-short-minnow-813.mypinata.cloud/ipfs/QmSDynQcs7xBR3CcaNdX5k23iEeptTEWgXrQsUuBA7RBfd/{team}/{top_tile}.png"),
             utf8(b"FoMoney is a fully onchain game. Buy Key and combine the tiles to win BIG!"),
-            utf8(b"<https://fomoney.io>"),
+            utf8(b"https://fomoney.io"),
             utf8(b"FoMoney"),
-            utf8(b"<logo.png>"),
+            utf8(b"https://i.postimg.cc/vBDyR7gc/me11.png"),
             utf8(b"FoMoney")
         ];
 
@@ -185,6 +188,7 @@ module fomolove2048::game {
             // game: maintainer.game_count + 1,
             created_at: current_time,
             player,
+            team,
             move_count: 0,
             score,
             top_tile,
@@ -260,9 +264,12 @@ module fomolove2048::game {
         let score = *game_board::score(&new_board);
         let game_over = *game_board::game_over(&new_board);
 
+        let game_team = season::get_taem_by_player_address(player_maintainer, season, *player(game));
+
         event::emit(GameMoveEvent {
             game_id: object::uid_to_inner(&game.id),
-            direction: direction,
+            team: game_team,
+            direction,
             move_count,
             packed_spaces: *game_board::packed_spaces(&new_board),
             last_tile: *game_board::last_tile(&new_board),
@@ -274,6 +281,7 @@ module fomolove2048::game {
         if (game_over) {            
             event::emit(GameOverEvent {
                 game_id: object::uid_to_inner(&game.id),
+                team: game_team,
                 top_tile,
                 score
             });
@@ -308,6 +316,7 @@ module fomolove2048::game {
             // game: _,
             created_at: _,
             player: _,
+            team: _,
             active_board: _,
             move_count: _,
             score: _,

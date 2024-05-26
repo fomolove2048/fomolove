@@ -1,16 +1,20 @@
 module fomolove2048::keys_calc {
     use sui::math::{sqrt_u128};
 
-    const CACL_DECIMALS:u128 = 1000000000000000000;
+    const CACL_DECIMALS:u128 = 1000000000;
 
     //calculates how many keys would exist with given an amount of sui
     public fun keys(suis: u128): u128{
-        return (sqrt_u128(suis * 312500000 + 5624988281256103515625000000) - 74999921875000) * CACL_DECIMALS / 156250000
+        return (sqrt_u128((suis/2000) * CACL_DECIMALS * 312500000 + 5624988281256103515625000000) - 74999921875000) * CACL_DECIMALS / 156250000
+    }
+
+    public fun keys_calc(suis: u128): u128{
+        return suis * 312500000 + 5624988281256103515625000000
     }
 
     //calculates how much sui would be in contract given a number of keys
     public fun sui(keys: u128): u128{
-        return (78125000 * keys * keys / CACL_DECIMALS + 149999843750000 * keys / 2) / CACL_DECIMALS
+        return (78125000 * keys * keys / (CACL_DECIMALS * CACL_DECIMALS) + 149999843750000 * keys / 2) *2000 /  (CACL_DECIMALS * CACL_DECIMALS)
     }
 
     //calculates number of keys received given X sui
