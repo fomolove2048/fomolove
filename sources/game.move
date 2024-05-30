@@ -106,7 +106,7 @@ module fomolove2048::game {
             utf8(b"FoMoney is a fully onchain game. Buy Key and combine the tiles to win BIG!"),
             utf8(b"https://fomoney.io"),
             utf8(b"FoMoney"),
-            utf8(b"https://i.postimg.cc/vBDyR7gc/me11.png"),
+            utf8(b"https://fomoney.io/static/media/logo.8b26dda945037e5c8d5c.png"),
             utf8(b"FoMoney")
         ];
 
@@ -264,7 +264,7 @@ module fomolove2048::game {
         let score = *game_board::score(&new_board);
         let game_over = *game_board::game_over(&new_board);
 
-        let game_team = season::get_taem_by_player_address(player_maintainer, season, *player(game));
+        let game_team = season::get_team_by_player_address(player_maintainer, season, *player(game));
 
         event::emit(GameMoveEvent {
             game_id: object::uid_to_inner(&game.id),

@@ -683,12 +683,17 @@ module fomolove2048::season {
         let winner_info = table::borrow_mut(&mut season.player_infos, winner_player);
         let winner_hold_keys = winner_info.keys_cur;
         //to keys holder
-        team_info.pot_per_key = coin::value(&keys_holder_prize) * 1000 / (team_info.keys_cur - winner_hold_keys);
-        coin::put(&mut team_info.keys_holder_pot, keys_holder_prize);
+        if (team_info.keys_cur - winner_hold_keys > 0) {
+            team_info.pot_per_key = coin::value(&keys_holder_prize) * 1000 / (team_info.keys_cur - winner_hold_keys);
+            coin::put(&mut team_info.keys_holder_pot, keys_holder_prize);
+        } else {
+            team_info.pot_per_key = 0;
+            coin::put(&mut global.platform, keys_holder_prize);
+        };
 
         //to rose holder
         let winner_hold_rose = winner_info.rose_cur;
-        if (team_info.rose_cur > 0) {
+        if (team_info.rose_cur - winner_hold_rose > 0) {
             team_info.pot_per_rose = coin::value(&rose_holder_prize) * 1000 / (team_info.rose_cur - winner_hold_rose);
             coin::put(&mut team_info.rose_holder_pot, rose_holder_prize);
         } else {
@@ -769,6 +774,9 @@ module fomolove2048::season {
         player_id: u64,
     ){
         // calc profit per key & round mask based on this buy:  (dust goes to pot)
+        if (season.keys_cur == 0){
+            return
+        };
         let profit_per_key = dividend * 1000 / season.keys_cur;
         season.mask = season.mask + profit_per_key;
 
@@ -823,9 +831,9 @@ module fomolove2048::season {
         };
 
         let winner_team_info = table::borrow(&season.team_infos, winner_team);
-        if (winner_team_info.rose_cur == 0) {
-            return 0
-        };
+        // if (winner_team_info.rose_cur == 0) {
+        //     return 0
+        // };
         let keys_holder_prize_value = 0;
         let season_pot_value = balance::value(&season.pot);
 
@@ -838,6 +846,9 @@ module fomolove2048::season {
             keys_holder_prize_value = season_pot_value * POT_TO_WINNER_TEAM_KEYS_HOLDER_RED / 100;
         };
 
+        if (winner_team_info.keys_cur - winner_hold_keys == 0){
+            return 0
+        };
         let pot_per_key = keys_holder_prize_value * 1000 / (winner_team_info.keys_cur - winner_hold_keys);
 
         return pot_per_key * play_info.keys_cur
@@ -869,6 +880,10 @@ module fomolove2048::season {
             rose_holder_prize_value = season_pot_value * POT_TO_WINNER_TEAM_ROSE_HOLDER_BLUE / 100;
         } else {
             rose_holder_prize_value = season_pot_value * POT_TO_WINNER_TEAM_ROSE_HOLDER_RED / 100;
+        };
+
+        if (winner_team_info.rose_cur - winner_hold_rose == 0){
+            return 0
         };
 
         let pot_per_rose = rose_holder_prize_value * 1000 / (winner_team_info.rose_cur - winner_hold_rose);
@@ -1039,6 +1054,47 @@ module fomolove2048::season {
         )
     }
 
+    public fun get_season_info(
+        season: &Season
+    ): (
+        u64, u64, u64, u64, u64, bool, u64, u64, u64, u64, u64
+    ) {
+        let season_pot_value = balance::value(&season.pot);
+        let season_dividend_value = balance::value(&season.dividend);
+        let season_airdrop_value = balance::value(&season.airdrop);
+        (
+            season.keys_cur,          //season keys
+            season.sui_cur,           //season sui
+            season.rose_cur,          //season rose
+            season.start_time,        //season start time
+            season.end_time,          //season end time
+            season.ended,             //season ended
+            season.winner_team,       //winner team
+            season.winner_player,     //winner player
+            season_pot_value,         //season active pot
+            season_dividend_value,    //season diviend pot value
+            season_airdrop_value,     //season airdrop pot value
+        )
+    }
+
+    public fun get_team_info(
+        season: &Season,
+        team: u64
+    ): (
+        u64, u64, u64, u64, u64, u64
+    ) {
+        assert!(team == TEAM_BLUE || team == TEAM_RED, EInvalidTeam);
+        let team_info = table::borrow(&season.team_infos, team);
+        (
+            team_info.keys_cur,          //team keys
+            team_info.sui_cur,           //team sui
+            team_info.rose_cur,          //team rose
+            team_info.game_count,        //team game count
+            balance::value(&team_info.keys_holder_pot), //team keys holder pot
+            balance::value(&team_info.rose_holder_pot), //team rose holder pot
+        )
+    }
+
     public fun get_global_info_by_address(
         player_maintainer: &mut PlayMaintainer,
         global: &GlobalConfig,
@@ -1124,7 +1180,7 @@ module fomolove2048::season {
         season_list
     }
 
-    public fun get_taem_by_player_address(
+    public fun get_team_by_player_address(
         player_maintainer: &mut PlayMaintainer,
         season: &Season,
         address: address

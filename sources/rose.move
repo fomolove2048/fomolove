@@ -46,11 +46,11 @@ module fomolove2048::rose {
 
         let values = vector[
             utf8(b"FoMoney2048"),
-            utf8(b"https://i.postimg.cc/vBDyR7gc/me11.png"),
+            utf8(b"https://i.postimg.cc/4xNLQzpR/2048.png"),
             utf8(b"FoMoney is a fully onchain game. Buy Key and combine the tiles to win BIG!"),
             utf8(b"https://fomoney.io"),
             utf8(b"FoMoney"),
-            utf8(b"https://i.postimg.cc/vBDyR7gc/me11.png"),
+            utf8(b"https://fomoney.io/static/media/logo.8b26dda945037e5c8d5c.png"),
             utf8(b"FoMoney")
         ];
 

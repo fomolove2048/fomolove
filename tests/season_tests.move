@@ -109,6 +109,11 @@ module fomolove2048::season_tests {
 
             cur_keys = fomolove2048::keys_calc::keys(0);
             std::debug::print(&cur_keys);
+
+            std::debug::print(&(fomolove2048::keys_calc::sui_rec(0*000000000, 2*1000000000) as u64));
+            std::debug::print(&fomolove2048::keys_calc::sui_rec(0*000000000, 10000*1000000000));
+            std::debug::print(&fomolove2048::keys_calc::sui_rec(0*000000000, 100000*1000000000));
+            std::debug::print(&fomolove2048::keys_calc::sui_rec(0*000000000, 1000000*1000000000));
         };
 
         //PLAYER2 buy keys
@@ -174,7 +179,7 @@ module fomolove2048::season_tests {
                 &mut global,
                 &mut season,
                 test_coin3,
-                1 * 1000000000,
+                10 * 1000000000,
                 1,
                 1,
                 &clock,
