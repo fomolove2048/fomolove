@@ -260,7 +260,8 @@ module fomolove2048::season {
             return
         };
 
-        assert!(keys >= SUI_DECIMALS && keys <= 100 * SUI_DECIMALS && keys % SUI_DECIMALS == 0, EInvalidKeys);
+        // assert!(keys >= SUI_DECIMALS && keys <= 100 * SUI_DECIMALS && keys % SUI_DECIMALS == 0, EInvalidKeys);
+        assert!(keys >= SUI_DECIMALS && keys % SUI_DECIMALS == 0, EInvalidKeys);
         assert!(contains(&global.season_infos, season.season_id), EInvalidSeason);
 
         //get player id, create player vaults if not exist
@@ -292,8 +293,8 @@ module fomolove2048::season {
         };
 
         // update timer
-        if (current_time + DEFAULT_SEASON_TIMER >= season.end_time + keys * ADD_TIMER_PER_KEY){
-            season.end_time = season.end_time + keys * ADD_TIMER_PER_KEY;
+        if (current_time + DEFAULT_SEASON_TIMER >= season.end_time + keys * ADD_TIMER_PER_KEY / SUI_DECIMALS){
+            season.end_time = season.end_time + keys * ADD_TIMER_PER_KEY / SUI_DECIMALS;
         } else {
             season.end_time = current_time + DEFAULT_SEASON_TIMER;
         };
