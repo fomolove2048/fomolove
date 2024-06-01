@@ -430,10 +430,13 @@ module fomolove2048::season {
         player_maintainer: &mut PlayMaintainer,
         global: &mut GlobalConfig,
         season: &mut Season,
+        clock: &Clock,
         ctx: &TxContext
-    ) : u64 {
+    ) : (u64, u64) {
         let player = tx_context::sender(ctx);
         let player_id = view_player_id_by_address(player_maintainer, player);
+        let current_time = clock::timestamp_ms(clock);
+        assert!(current_time <= season.end_time, ESeasonIsEnded);
 
         //get player info in team
         assert!(contains(&season.player_infos, player_id), EInvalidPlayer);
@@ -448,7 +451,7 @@ module fomolove2048::season {
         player_info.game_count = player_info.game_count + 1;
         team_info.game_count = team_info.game_count + 1;
 
-        player_info.team
+        (player_info.team, season.season_id)
     }
 
     public(friend) fun submit_game(
@@ -457,9 +460,13 @@ module fomolove2048::season {
         leader_address: address,
         top_tile: u64,
         score: u64,
+        season_id: u64,
+        clock: &Clock
     ) {
+        let current_time = clock::timestamp_ms(clock);
         let leaderboard = &mut season.leaderboard;
-
+        assert!(current_time <= season.end_time, ESeasonIsEnded);
+        assert!(season_id == season.season_id, EInvalidSeason);
         assert!(top_tile >= leaderboard.min_tile, ELowTile);
         assert!(score > leaderboard.min_score, ELowScore);
 
@@ -480,17 +487,18 @@ module fomolove2048::season {
         game_player: address,
         top_tile: u64,
         score: u64,
-        game_create_time: u64,
+        season_id: u64,
         clock: &Clock,
         ctx: &mut TxContext
     ){
         //game time
-        if (game_create_time < season.start_time){
+        let current_time = clock::timestamp_ms(clock);
+        if (current_time > season.end_time){
             return
         };
-        if (game_create_time > season.end_time){
-            return
-        };
+
+        assert!(season_id == season.season_id, EInvalidSeason);
+
         //EGameMintedRose
         if (vector::contains(&season.games_minted_rose, &game_id)){
             return

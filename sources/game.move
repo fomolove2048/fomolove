@@ -38,6 +38,7 @@ module fomolove2048::game {
     struct Game has key, store {
         id: UID,
         // game: u64,
+        season_id: u64,
         created_at: u64,
         player: address,
         team: u64,
@@ -167,6 +168,7 @@ module fomolove2048::game {
     fun create(
         // maintainer: &mut GameMaintainer,
         // fee: vector<Coin<SUI>>,
+        season_id: u64,
         team: u64,
         clock: &Clock,
         ctx: &mut TxContext
@@ -186,6 +188,7 @@ module fomolove2048::game {
         let game = Game {
             id: uid,
             // game: maintainer.game_count + 1,
+            season_id,
             created_at: current_time,
             player,
             team,
@@ -218,26 +221,30 @@ module fomolove2048::game {
         clock: &Clock,
         ctx: &mut TxContext
     ){
-        let team = season::after_start_game(
+        let (team, season_id) = season::after_start_game(
             player_maintainer,
             global,
             season,
+            clock,
             ctx
         );
 
-        create(/*maintainer, vector[], */team, clock, ctx);
+        create(/*maintainer, vector[], */season_id, team, clock, ctx);
     }
 
     public entry fun submit_game_on_leaderboard(
         game: &mut Game,
-        season: &mut Season
+        season: &mut Season,
+        clock: &Clock
     ){
         season::submit_game(
             season,
             id(game),
             *player(game),
             *top_tile(game),
-            *score(game)
+            *score(game),
+            game.season_id,
+            clock
         );
     }
 
@@ -303,7 +310,7 @@ module fomolove2048::game {
                 *player(game),
                 *top_tile(game),
                 *score(game),
-                *game_created_at(game),
+                game.season_id,
                 clock,
                 ctx
             )
@@ -314,6 +321,7 @@ module fomolove2048::game {
         let Game {  
             id,
             // game: _,
+            season_id: _,
             created_at: _,
             player: _,
             team: _,
