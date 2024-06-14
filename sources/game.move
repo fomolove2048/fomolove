@@ -213,11 +213,11 @@ module fomolove2048::game {
         // transfer::public_transfer(remainder, player);
     }
 
-    public entry fun start_game(
+    public entry fun start_game<T>(
         // maintainer: &mut GameMaintainer,
         player_maintainer: &mut PlayMaintainer,
-        global: &mut GlobalConfig,
-        season: &mut Season,
+        global: &mut GlobalConfig<T>,
+        season: &mut Season<T>,
         clock: &Clock,
         ctx: &mut TxContext
     ){
@@ -232,9 +232,9 @@ module fomolove2048::game {
         create(/*maintainer, vector[], */season_id, team, clock, ctx);
     }
 
-    public entry fun submit_game_on_leaderboard(
+    public entry fun submit_game_on_leaderboard<T>(
         game: &mut Game,
-        season: &mut Season,
+        season: &mut Season<T>,
         clock: &Clock
     ){
         season::submit_game(
@@ -248,9 +248,9 @@ module fomolove2048::game {
         );
     }
 
-    public entry fun make_move(
+    public entry fun make_move<T>(
         player_maintainer: &mut PlayMaintainer,
-        season: &mut Season,
+        season: &mut Season<T>,
         game: &mut Game,
         direction: u64,
         clock: &Clock,

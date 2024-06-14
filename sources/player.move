@@ -121,9 +121,9 @@ module fomolove2048::player {
     }
 
     #[allow(lint(self_transfer))]
-    public(friend) fun register_name(
+    public(friend) fun register_name<T>(
         maintainer: &mut PlayMaintainer,
-        fee: Coin<SUI>,
+        fee: Coin<T>,
         name: String,
         aff_id: u64,
         ctx: &mut TxContext
@@ -250,9 +250,9 @@ module fomolove2048::player {
         return view_player_actived_name_by_player_id(maintainer, player_id)
     }
 
-    public(friend) fun merge_and_split(
-        coins: vector<Coin<SUI>>, amount: u64, ctx: &mut TxContext
-    ): (Coin<SUI>, Coin<SUI>) {
+    public(friend) fun merge_and_split<T>(
+        coins: vector<Coin<T>>, amount: u64, ctx: &mut TxContext
+    ): (Coin<T>, Coin<T>) {
         let base = vector::pop_back(&mut coins);
         pay::join_vec(&mut base, coins);
         let coin_value = coin::value(&base);
