@@ -188,6 +188,7 @@ module fomolove2048::season {
     }
 
     public entry fun create_global_config<T>(
+        maintainer: address,
         init_config: &mut InitConfig,
         ctx: &mut TxContext
     ) {
@@ -197,12 +198,14 @@ module fomolove2048::season {
 
         let global = GlobalConfig{
             id: object::new(ctx),
-            maintainer: sender,
+            maintainer,
             game_count: 0u64,
             platform: balance::zero<T>(),
             season_infos: table::new<u64, ID>(ctx),
             player_vaults: table::new<u64, PlayerVaults<T>>(ctx)
         };
+
+        init_config.create_global = true;
 
         transfer::share_object(global);
     }
