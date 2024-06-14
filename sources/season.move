@@ -1037,7 +1037,7 @@ module fomolove2048::season {
         season: &Season,
         address: address
     ): (
-        u64, u64, u64, u64, u64, u64, u64, u64, address
+        u64, u64, u64, u64, u64, u64, u64, u64, u64, u64, address
     ) {
         let player_sn = get_sn_by_address(season, address);
         let player_id = view_player_id_by_address(player_maintainer, address);
@@ -1056,7 +1056,9 @@ module fomolove2048::season {
             season_pot_value,        //season active pot
             (dividend_earning), //your earning rebate
             (winner_team_keys_earning + winner_team_rose_earning), //your earning on lock down
+            player_info.sui_cur,    //your spend sui
             player_info.keys_cur,    //your keys
+            player_info.rose_cur,    //your minted rose count
             player_info.game_count,  //your game count
             winner_prize,            //Seasonal winner prize
             winner_address,           //Potential winner address
